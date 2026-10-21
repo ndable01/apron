@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAFAF7">
+<meta name="description" content="Apron: проверка партии томатов до отгрузки. Прототип для питча.">
+<title>Apron</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@700&family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*
+  Шрифт Coolvetica для надписи Apron. Положите файл в fonts/ и раскомментируйте:
+  @font-face{font-family:'Coolvetica';src:url('fonts/coolvetica.woff2') format('woff2');font-weight:100 900;font-display:swap}
+  Пока файла нет, надпись показывается в Coolvetica только там, где шрифт установлен, иначе Inter Tight.
+*/
+:root{
+  --ground:#FAFAF7; --surface:#FFFFFF; --line:#E7E5DF; --fill:#EFEEE9;
+  --text:#1C1C1A; --soft:#4A4945; --muted:#6A6963;
+  --good:#2D6A4F; --warn:#7A5300; --bad:#A63A2B;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+html,body{margin:0;background:#ECEBE6}
+body{font-family:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+h1,h2,h3,p{margin:0}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
+img{display:block;max-width:100%}
+[hidden]{display:none!important}
+.sr-file{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+
+#app{position:relative;width:100%;max-width:440px;min-height:100vh;min-height:100dvh;margin:0 auto;background:var(--ground);overflow:hidden}
+.screen{display:none;flex-direction:column;min-height:100vh;min-height:100dvh;padding:calc(env(safe-area-inset-top,0px) + 12px) 20px calc(env(safe-area-inset-bottom,0px) + 28px)}
+.screen.active{display:flex}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.wordmark{font-family:'Coolvetica','Coolvetica Rg','Inter Tight','Onest',sans-serif;font-size:26px;line-height:1;font-weight:700;font-synthesis:none;letter-spacing:-0.01em;padding:8px 0;user-select:none;-webkit-user-select:none}
+.muted{color:var(--muted)}
+.small{font-size:14px;line-height:20px}
+.seg{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:2px;background:var(--fill);border-radius:12px}
+.seg button{height:44px;border-radius:10px;font-size:15px;font-weight:500;color:var(--muted);text-align:center}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(28,28,26,.08)}
+.head{margin-top:28px;display:flex;flex-direction:column;gap:6px}
+.kicker{font-size:14px;line-height:20px;color:var(--muted)}
+.title{font-size:28px;line-height:34px;font-weight:600;letter-spacing:-0.01em}
+.sub{font-size:16px;line-height:22px;color:var(--muted)}
+.h2{font-size:17px;line-height:24px;font-weight:600}
+.card{margin-top:24px;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:20px;display:flex;flex-direction:column}
+.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.progress{margin-top:12px;height:4px;border-radius:2px;background:var(--fill);overflow:hidden}
+.progress i{display:block;height:100%;background:var(--text);transition:width .4s ease}
+.card .text{margin-top:14px;font-size:15px;line-height:22px;color:var(--soft)}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;padding:0 16px;border-radius:14px;background:var(--text);color:#FFFFFF;font-size:17px;font-weight:600;text-align:center}
+.btn:active{opacity:.86}
+.btn[disabled]{background:#D9D7D0;color:var(--soft);cursor:default}
+.btn-line{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;padding:0 12px;border-radius:14px;border:1px solid #D9D7D0;background:var(--surface);font-size:15px;font-weight:600;text-align:center;cursor:pointer}
+.btn-text{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;font-size:16px;font-weight:500;text-align:center}
+.mt18{margin-top:18px}
+.section{margin-top:36px;display:flex;flex-direction:column}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:8px}
+.pb8{padding-bottom:8px}
+.rows{border-bottom:1px solid var(--line)}
+.row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px 0;border-top:1px solid var(--line)}
+.row-l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.row-t{font-size:16px;line-height:22px}
+.row-s{font-size:13px;line-height:18px;color:var(--muted)}
+.row-v{flex:none;font-size:16px;line-height:22px;font-weight:500;white-space:nowrap;text-align:right}
+.row-v.light{font-size:15px;font-weight:400;color:var(--muted)}
+.big{margin-top:16px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.big-n{font-size:44px;line-height:48px;font-weight:500;letter-spacing:-0.02em;white-space:nowrap}
+.status{font-size:15px;line-height:22px;font-weight:600;text-align:right}
+.s-ok{color:var(--good)} .s-close{color:var(--warn)} .s-over{color:var(--bad)}
+.gauge{position:relative;height:12px;margin-top:14px}
+.gauge .track{position:absolute;left:0;right:0;top:4px;height:4px;border-radius:2px;background:var(--fill)}
+.gauge .fill{position:absolute;left:0;top:4px;height:4px;border-radius:2px;background:var(--good);transition:width .4s ease,background-color .4s ease}
+.gauge .tick{position:absolute;top:0;left:66.67%;width:2px;height:12px;margin-left:-1px;background:var(--text)}
+.note{margin-top:18px;font-size:15px;line-height:22px;color:var(--soft)}
+.back{display:inline-flex;align-items:center;gap:4px;height:44px;margin-left:-6px;padding:0 8px 0 2px;font-size:16px;font-weight:500}
+
+/* Камера и анализ */
+.screen.cam{padding:0;position:relative;background:#E9E8E4;overflow:hidden}
+.cam-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#E9E8E4}
+.frame{position:absolute;left:50%;top:42%;width:min(80vw,322px);aspect-ratio:1/1;transform:translate(-50%,-50%);pointer-events:none}
+.frame i{position:absolute;width:30px;height:30px;border:3px solid rgba(28,28,26,.7)}
+.frame .tl{left:0;top:0;border-right:0;border-bottom:0;border-top-left-radius:12px}
+.frame .tr{right:0;top:0;border-left:0;border-bottom:0;border-top-right-radius:12px}
+.frame .bl{left:0;bottom:0;border-right:0;border-top:0;border-bottom-left-radius:12px}
+.frame .br{right:0;bottom:0;border-left:0;border-top:0;border-bottom-right-radius:12px}
+.scan{position:absolute;left:6%;right:6%;top:50%;height:2px;border-radius:1px;background:rgba(255,255,255,.95);box-shadow:0 0 12px 3px rgba(255,255,255,.65);animation:scan 2.2s ease-in-out infinite}
+@keyframes scan{0%,100%{top:12%}50%{top:88%}}
+.cam-top{position:absolute;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 12px);z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pill{display:inline-flex;align-items:center;height:44px;padding:0 16px;border-radius:22px;background:rgba(255,255,255,.92);font-size:15px;font-weight:500;white-space:nowrap;color:var(--text)}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:22px 20px calc(env(safe-area-inset-bottom,0px) + 20px);background:var(--surface);border-radius:24px 24px 0 0;display:flex;flex-direction:column;gap:10px}
+.sheet-k{font-size:14px;line-height:20px;color:var(--muted)}
+.sheet-t{font-size:19px;line-height:26px;font-weight:600}
+.sheet-p{font-size:15px;line-height:22px;color:var(--soft)}
+.sheet-p.warn{color:var(--bad)}
+.sheet-alt{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.steps{list-style:none;margin:4px 0 8px;padding:0;display:flex;flex-direction:column;gap:10px}
+.steps li{display:flex;align-items:center;gap:12px;font-size:15px;line-height:22px}
+.steps li.pending{color:var(--muted)}
+.steps .ic{flex:none;width:18px;height:18px;display:inline-flex}
+.steps .t{margin-left:auto;color:var(--muted)}
+.spin{animation:spin .9s linear infinite;transform-origin:50% 50%}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.scan,.spin{animation:none}}
+
+/* Результат */
+.res-photo{margin-top:12px;width:100%;aspect-ratio:350/240;object-fit:cover;border-radius:20px;background:var(--fill)}
+.verdict{margin-top:24px;font-size:34px;line-height:40px;font-weight:600;letter-spacing:-0.01em}
+.res-text{margin-top:6px;font-size:16px;line-height:23px;color:var(--soft)}
+.metric{margin-top:24px;padding-top:18px;border-top:1px solid var(--line);display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.metric + .metric{margin-top:14px;padding-top:14px}
+.metric-v{font-size:28px;line-height:34px;font-weight:500;letter-spacing:-0.01em;white-space:nowrap}
+.metric-v.sm{font-size:20px;line-height:28px}
+.grow{flex:1 1 auto;min-height:24px}
+.actions{display:flex;flex-direction:column;gap:8px}
+.grid3{margin-top:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+
+/* РЦ */
+.notice{margin-top:20px;display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:18px}
+.notice.pop{animation:pop .35s ease}
+@keyframes pop{from{transform:translateY(-6px);opacity:0}to{transform:none;opacity:1}}
+.notice img{flex:none;width:56px;height:56px;border-radius:12px;object-fit:cover;background:var(--fill)}
+.notice-l{display:flex;flex-direction:column;min-width:0}
+.notice-t{font-size:15px;line-height:21px;font-weight:600}
+.list{margin-top:12px;border-bottom:1px solid var(--line)}
+.li{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:16px 0;border-top:1px solid var(--line);text-align:left}
+.li-l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.li-t{font-size:16px;line-height:22px;font-weight:500}
+.li-s{font-size:14px;line-height:20px;color:var(--muted)}
+.li-r{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.li-v{font-size:16px;line-height:22px;font-weight:500;white-space:nowrap}
+.li-n{font-size:13px;line-height:20px;color:var(--muted);white-space:nowrap}
+.hint{display:flex;flex-direction:column;gap:4px;padding:14px 0;border-top:1px solid var(--line)}
+.hint-k{font-size:13px;line-height:18px;color:var(--muted)}
+.hint-v{font-size:16px;line-height:22px}
+.approve{margin-top:24px;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:20px;display:flex;flex-direction:column;gap:10px}
+.photos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:14px 0;border-top:1px solid var(--line)}
+.photos figure{margin:0;display:flex;flex-direction:column;gap:4px}
+.photos img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;background:var(--fill)}
+.photos figcaption{font-size:12px;line-height:16px;color:var(--muted)}
+
+/* Тост и демо-панель */
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);transform:translateX(-50%);width:max-content;max-width:min(400px,calc(100% - 32px));padding:12px 16px;border-radius:14px;background:var(--text);color:#FFFFFF;font-size:15px;line-height:21px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.demo-fab{position:fixed;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);z-index:40;height:36px;padding:0 14px;border-radius:18px;background:rgba(28,28,26,.85);color:#FFFFFF;font-size:13px;font-weight:600}
+.demo{position:fixed;left:0;right:0;bottom:0;z-index:60;max-width:440px;margin:0 auto;padding:18px 20px calc(env(safe-area-inset-bottom,0px) + 18px);background:var(--surface);border-radius:20px 20px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.16);display:flex;flex-direction:column;gap:12px}
+.demo-head{display:flex;align-items:center;justify-content:space-between}
+.demo-head .btn-text{width:auto}
+.demo-modes{display:flex;flex-wrap:wrap;gap:8px}
+.demo-modes button{min-height:40px;padding:0 14px;border-radius:12px;border:1px solid #D9D7D0;font-size:14px;font-weight:500}
+.demo-modes button[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:#FFFFFF}
+</style>
+</head>
+<body>
+<noscript>Для прототипа нужен включённый JavaScript.</noscript>
+<div id="app">
+
+<!-- 1. Поставщик: партия и чек-лист -->
+<section class="screen" id="s-supplier" aria-label="Поставщик: партия и чек-лист">
+  <div class="topbar">
+    <button class="wordmark" type="button" aria-label="Apron">Apron</button>
+    <span class="small muted">«Южная гряда»</span>
+  </div>
+  <div class="seg" role="group" aria-label="Роль">
+    <button type="button" aria-pressed="true" data-go="supplier">Поставщик</button>
+    <button type="button" aria-pressed="false" data-go="rc">РЦ</button>
+  </div>
+  <header class="head">
+    <span class="kicker">Партия 0611-07</span>
+    <h1 class="title">Томаты розовые, 10&nbsp;т</h1>
+    <p class="sub">Сеть «Город», РЦ Север<br>Отгрузка сегодня в 14:00</p>
+  </header>
+  <section class="card" aria-labelledby="todo-h">
+    <div class="card-head"><h2 class="h2" id="todo-h">Чек-лист</h2><span class="muted" id="sup-count">11 из 12</span></div>
+    <div class="progress"><i id="sup-progress" style="width:91.67%"></i></div>
+    <p class="text" id="sup-text"></p>
+    <button class="btn mt18" type="button" id="sup-cta">Проверить плод</button>
+  </section>
+  <section class="section" aria-labelledby="meas-h">
+    <div class="section-head"><h2 class="h2" id="meas-h">Замеры</h2><span class="small muted">сегодня в 08:40</span></div>
+    <div class="rows">
+      <div class="row"><span class="row-l"><span class="row-t">Температура</span><span class="row-s">норма 10-15&nbsp;°C, термощуп</span></span><span class="row-v">12,4&nbsp;°C</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Калибр</span><span class="row-s">разброс 11&nbsp;мм при норме до 15</span></span><span class="row-v">62&nbsp;мм</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Масса нетто</span><span class="row-s">10 ящиков, номинал 6&nbsp;кг</span></span><span class="row-v">6,04&nbsp;кг</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Твёрдость</span><span class="row-s">пенетрометр</span></span><span class="row-v">2,4&nbsp;кг/см²</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Сахаристость</span><span class="row-s">рефрактометр, Brix</span></span><span class="row-v">5,4&nbsp;°Bx</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Нитраты</span><span class="row-s">норма до 300 для теплиц</span></span><span class="row-v">112&nbsp;мг/кг</span></div>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="docs-h">
+    <h2 class="h2 pb8" id="docs-h">Документы и упаковка</h2>
+    <div class="rows">
+      <div class="row"><span class="row-t">Декларация ТР ТС 021</span><span class="row-v light">действует</span></div>
+      <div class="row"><span class="row-t">Паспорт качества</span><span class="row-v light">загружен</span></div>
+      <div class="row"><span class="row-t">Протокол испытаний</span><span class="row-v light">от 28.10</span></div>
+      <div class="row"><span class="row-t">ТТН и УПД</span><span class="row-v light">загружены</span></div>
+      <div class="row"><span class="row-t">Маркировка и даты</span><span class="row-v light">проверены</span></div>
+      <div class="row"><span class="row-t">Остаточный срок</span><span class="row-v light">6 из 7 дней</span></div>
+      <div class="row"><span class="row-t">Паллеты и тара</span><span class="row-v light">20 паллет</span></div>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="sum-h">
+    <h2 class="h2" id="sum-h">Партия сейчас</h2>
+    <div class="big"><span class="big-n" id="sup-pct">4,2 %</span><span class="status s-ok" id="sup-status">В допуске</span></div>
+    <span class="kicker" style="margin-top:4px">брак в пробе, допуск сети 10&nbsp;%</span>
+    <div class="gauge" aria-hidden="true"><span class="track"></span><span class="fill" id="sup-fill"></span><span class="tick"></span></div>
+    <div class="rows" style="margin-top:18px">
+      <div class="row"><span class="row-t">Проверено</span><span class="row-v" id="sup-checked"></span></div>
+      <div class="row"><span class="row-t">Не по критериям сети</span><span class="row-v" id="sup-off"></span></div>
+      <div class="row"><span class="row-t">Ожидаемая выручка</span><span class="row-v">1&nbsp;200&nbsp;000&nbsp;₽</span></div>
+      <div class="row"><span class="row-t">Риск среза</span><span class="row-v" id="sup-risk"></span></div>
+    </div>
+    <p class="note" id="sup-note"></p>
+  </section>
+</section>
+
+<!-- 2. Камера -->
+<section class="screen cam" id="s-camera" aria-label="Камера">
+  <video id="cam-video" class="cam-bg" playsinline muted autoplay></video>
+  <img id="cam-still" class="cam-bg" alt="" hidden>
+  <div class="frame" aria-hidden="true"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+  <div class="cam-top"><button class="pill" type="button" data-go="supplier">Отменить</button><span class="pill" id="cam-count">Плод 25 из 30</span></div>
+  <div class="sheet">
+    <span class="sheet-k" id="cam-box"></span>
+    <h2 class="sheet-t">Наведите камеру на плод</h2>
+    <p class="sheet-p" id="cam-hint"></p>
+    <button class="btn" type="button" id="cam-shot">Сделать снимок</button>
+    <div class="sheet-alt">
+      <label class="btn-line">Загрузить фото<input class="sr-file" type="file" accept="image/*" capture="environment" id="cam-file"></label>
+      <button class="btn-line" type="button" id="cam-demo">Демо-фото</button>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Анализ фото -->
+<section class="screen cam" id="s-analysis" aria-label="Анализ фото">
+  <img id="an-photo" class="cam-bg" alt="Снимок плода">
+  <div class="frame" aria-hidden="true"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i><div class="scan"></div></div>
+  <div class="cam-top"><span></span><span class="pill" id="an-count"></span></div>
+  <div class="sheet">
+    <h2 class="sheet-t">Проверяем плод</h2>
+    <ol class="steps" id="an-steps">
+      <li data-i="1"><span class="ic"></span><span>Фото получено</span><span class="t"></span></li>
+      <li data-i="2"><span class="ic"></span><span>Сверяем с критериями сети «Город»</span><span class="t"></span></li>
+      <li data-i="3"><span class="ic"></span><span>Готовим объяснение</span><span class="t"></span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- 4-5. Результат -->
+<section class="screen" id="s-result" aria-label="Результат проверки">
+  <div class="topbar">
+    <button class="back" type="button" data-go="supplier"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 L7 10 L12.5 15.5"></path></svg>Партия</button>
+    <span class="small muted" id="res-count"></span>
+  </div>
+  <img id="res-photo" class="res-photo" alt="Проверенный плод">
+  <h1 class="verdict" id="res-title"></h1>
+  <p class="res-text" id="res-text"></p>
+  <div class="metric"><span class="row-t">Брак в пробе</span><span class="metric-v" id="res-defect"></span></div>
+  <div class="metric" id="res-off-row" hidden><span class="row-t">Не по критериям сети</span><span class="metric-v sm" id="res-off"></span></div>
+  <div class="grow"></div>
+  <div class="actions">
+    <button class="btn" type="button" id="res-next">Проверить следующий плод</button>
+    <button class="btn-text" type="button" data-go="supplier">Вернуться к партии</button>
+  </div>
+</section>
+
+<!-- 6. Нет связи с моделью -->
+<section class="screen" id="s-nolink" aria-label="Модель не ответила">
+  <div class="topbar">
+    <button class="back" type="button" data-go="supplier"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 L7 10 L12.5 15.5"></path></svg>Партия</button>
+    <span class="small muted" id="nl-count"></span>
+  </div>
+  <img id="nl-photo" class="res-photo" alt="Снимок плода">
+  <h1 class="verdict">Модель не ответила</h1>
+  <p class="res-text">Посмотрите на плод сами и отметьте результат. Фото сохранится в пробе.</p>
+  <div class="grid3">
+    <button class="btn-line" type="button" data-mark="good">Годен</button>
+    <button class="btn-line" type="button" data-mark="offspec">Не по критериям</button>
+    <button class="btn-line" type="button" data-mark="defect">Брак</button>
+  </div>
+  <div class="grow"></div>
+  <div class="actions">
+    <button class="btn" type="button" id="nl-retry">Переснять и проверить снова</button>
+  </div>
+</section>
+
+<!-- 7. РЦ: поставки -->
+<section class="screen" id="s-rc" aria-label="РЦ: поставки на сегодня">
+  <div class="topbar">
+    <button class="wordmark" type="button" aria-label="Apron">Apron</button>
+    <span class="small muted">РЦ Север</span>
+  </div>
+  <div class="seg" role="group" aria-label="Роль">
+    <button type="button" aria-pressed="false" data-go="supplier">Поставщик</button>
+    <button type="button" aria-pressed="true" data-go="rc">РЦ</button>
+  </div>
+  <div id="rc-notice-wrap"></div>
+  <h1 class="title" style="margin-top:28px;font-size:24px;line-height:30px">Поставки на сегодня</h1>
+  <span class="kicker" style="margin-top:4px">4 партии</span>
+  <div class="list">
+    <button class="li" type="button" data-go="passport">
+      <span class="li-l"><span class="li-t">Томаты розовые, 10&nbsp;т</span><span class="li-s">«Южная гряда», в 16:40</span></span>
+      <span class="li-r"><span class="li-v" id="rc-tom-v"></span><span class="li-n" id="rc-tom-n"></span></span>
+    </button>
+    <div class="li">
+      <span class="li-l"><span class="li-t">Огурцы, 6&nbsp;т</span><span class="li-s">«Тёплый край», в 11:30</span></span>
+      <span class="li-r"><span class="li-v s-ok" style="font-size:15px">Принята</span><span class="li-n">в 11:52</span></span>
+    </div>
+    <div class="li">
+      <span class="li-l"><span class="li-t">Перец сладкий, 4&nbsp;т</span><span class="li-s">«Зелёный ряд», в 15:10</span></span>
+      <span class="li-r"><span class="li-v">3,0&nbsp;%</span><span class="li-n">в допуске</span></span>
+    </div>
+    <div class="li">
+      <span class="li-l"><span class="li-t">Яблоки, 8&nbsp;т</span><span class="li-s">«Сад-Регион», в 18:20</span></span>
+      <span class="li-r"><span class="li-v muted" style="font-size:15px">Нет данных</span><span class="li-n">проверки не было</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- 7.1. РЦ: паспорт партии -->
+<section class="screen" id="s-passport" aria-label="РЦ: паспорт партии">
+  <div class="topbar">
+    <button class="back" type="button" data-go="rc"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 L7 10 L12.5 15.5"></path></svg>Поставки</button>
+    <span class="small muted">РЦ Север</span>
+  </div>
+  <header class="head" style="margin-top:20px">
+    <span class="kicker">Паспорт партии 0611-07</span>
+    <h1 class="title">Томаты розовые, 10&nbsp;т</h1>
+    <p class="sub">«Южная гряда», прибытие в 16:40</p>
+  </header>
+  <section class="card" aria-labelledby="ps-def-h">
+    <h2 class="kicker" id="ps-def-h">Брак в пробе</h2>
+    <div class="big" style="margin-top:4px"><span class="big-n" id="ps-pct"></span><span class="status" id="ps-status"></span></div>
+    <p class="kicker" style="margin-top:4px" id="ps-sub"></p>
+    <div class="gauge" aria-hidden="true"><span class="track"></span><span class="fill" id="ps-fill"></span><span class="tick"></span></div>
+  </section>
+  <div id="ps-approve-wrap"></div>
+  <section class="section" aria-labelledby="ps-hint-h" style="margin-top:32px">
+    <h2 class="h2 pb8" id="ps-hint-h">Подсказки для приёмки</h2>
+    <div class="rows">
+      <div class="hint"><span class="hint-k">Как проверять</span><span class="hint-v" id="ps-how"></span></div>
+      <div class="hint"><span class="hint-k">Что совпало</span><span class="hint-v">Температура, калибр, масса, сахаристость и документы совпали с данными поставщика.</span></div>
+      <div class="hint"><span class="hint-k">На что обратить внимание в машине</span><span class="hint-v" id="ps-watch"></span></div>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="ps-m-h" style="margin-top:32px">
+    <div class="section-head"><h2 class="h2" id="ps-m-h">Замеры поставщика</h2><span class="small muted">сегодня в 08:40</span></div>
+    <div class="rows">
+      <div class="row"><span class="row-l"><span class="row-t">Температура</span><span class="row-s">норма 10-15&nbsp;°C, термощуп</span></span><span class="row-v">12,4&nbsp;°C</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Калибр</span><span class="row-s">разброс 11&nbsp;мм при норме до 15</span></span><span class="row-v">62&nbsp;мм</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Масса нетто</span><span class="row-s">10 ящиков, номинал 6&nbsp;кг</span></span><span class="row-v">6,04&nbsp;кг</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Твёрдость</span><span class="row-s">пенетрометр</span></span><span class="row-v">2,4&nbsp;кг/см²</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Сахаристость</span><span class="row-s">рефрактометр, Brix</span></span><span class="row-v">5,4&nbsp;°Bx</span></div>
+      <div class="row"><span class="row-l"><span class="row-t">Нитраты</span><span class="row-s">норма до 300 для теплиц</span></span><span class="row-v">112&nbsp;мг/кг</span></div>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="ps-d-h" style="margin-top:32px">
+    <h2 class="h2 pb8" id="ps-d-h">Документы</h2>
+    <div class="rows">
+      <div class="row"><span class="row-t">Декларация ТР ТС 021</span><span class="row-v light">действует</span></div>
+      <div class="row"><span class="row-t">Паспорт качества</span><span class="row-v light">загружен</span></div>
+      <div class="row"><span class="row-t">Протокол испытаний</span><span class="row-v light">от 28.10</span></div>
+      <div class="row"><span class="row-t">ТТН и УПД</span><span class="row-v light">загружены</span></div>
+      <div class="row"><span class="row-t">Маркировка и даты</span><span class="row-v light">проверены</span></div>
+      <div class="row"><span class="row-t">Остаточный срок</span><span class="row-v light">6 из 7 дней</span></div>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="ps-s-h" style="margin-top:32px">
+    <h2 class="h2 pb8" id="ps-s-h">Поставка</h2>
+    <div class="rows">
+      <div class="row"><span class="row-t">Машина</span><span class="row-v light">А&nbsp;417&nbsp;КМ&nbsp;42</span></div>
+      <div class="row"><span class="row-t">Объём</span><span class="row-v light">10&nbsp;т, 20 паллет</span></div>
+      <div class="row"><span class="row-t">Отгрузка</span><span class="row-v light">сегодня в 14:00</span></div>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="ps-p-h" style="margin-top:32px">
+    <div class="section-head"><h2 class="h2" id="ps-p-h">Фото пробы</h2><span class="small muted" id="ps-photo-count"></span></div>
+    <div class="photos" id="ps-photos"></div>
+  </section>
+</section>
+
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<button class="demo-fab" type="button" id="demo-fab" hidden>Демо</button>
+<div class="demo" id="demo" role="dialog" aria-label="Демо-панель" hidden>
+  <div class="demo-head"><strong>Демо-панель</strong><button class="btn-text" type="button" id="demo-close">Закрыть</button></div>
+  <span class="kicker">Ответ «модели» на следующий снимок</span>
+  <div class="demo-modes" id="demo-modes">
+    <button type="button" data-mode="auto">Авто</button>
+    <button type="button" data-mode="good">Годен</button>
+    <button type="button" data-mode="offspec">Не по критериям</button>
+    <button type="button" data-mode="defect">Брак</button>
+    <button type="button" data-mode="nolink">Нет связи</button>
+  </div>
+  <button class="btn-line" type="button" id="demo-reset">Сбросить пробу: 24 из 30, 1 брак</button>
+  <span class="kicker" id="demo-sync"></span>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+/* ================= Настройки ================= */
+var CONFIG = {
+  // Синхронизация между телефонами через публичный ntfy.sh, без своего сервера.
+  // Комнату можно переопределить ссылкой: ?room=код
+  sync: true,
+  syncServer: 'https://ntfy.sh',
+  room: 'apron-hwkqb1wi',
+  // Адрес настоящей модели. Пусто: ответ модели симулируется в браузере.
+  analyzeUrl: '',
+  analyzeTimeoutMs: 10000,
+  // Партия для демо
+  sampleTotal: 30,
+  preChecked: 24,
+  preDefects: 1,
+  tolerance: 10,   // допуск сети, %
+  warnFrom: 7,     // с какого процента «близко к допуску»
+  revenue: 1200000,
+  pallets: 20,
+  boxesPerPallet: 84
+};
+
+var DEMO_PHOTO = 'data:image/jpeg;base64,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';
+
+/* ================= Утилиты ================= */
+function $(s, r) { return (r || document).querySelector(s); }
+function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+var nf1 = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+var nf0 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+function pct(v) { return nf1.format(v) + ' %'; }
+function rub(v) { return nf0.format(Math.round(v)) + ' ₽'; }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+var clientId = Math.random().toString(36).slice(2, 10);
+var params = new URLSearchParams(location.search);
+
+var TITLES = { good: 'Годен', offspec: 'Не по критериям сети', defect: 'Брак' };
+var CLASSES = { good: 's-ok', offspec: 's-close', defect: 's-over' };
+var EXPLAIN = {
+  good: 'Подходит по критериям сети: калибр, зрелость и форма в норме, дефектов нет.',
+  offspec: 'Это не брак: плод целый, но по калибру и зрелости не проходит в этот сорт сети «Город».',
+  defect: 'Трещина у плодоножки и мягкий участок сбоку: в сеть такой плод не идёт.'
+};
+var SHORT = { good: 'годен', offspec: 'не по критериям сети', defect: 'брак' };
+var STATUS = { ok: 'В допуске', close: 'Близко к допуску', over: 'Выше допуска' };
+
+/* ================= Состояние ================= */
+var STORE_KEY = 'apron-demo-v1';
+function baseState() {
+  return { checked: CONFIG.preChecked, defects: CONFIG.preDefects, offSpec: 0, submitted: false, approved: false, fruits: [], v: 0 };
+}
+var S = loadState();
+var current = null;      // плод, который проверяем сейчас: {photo, box, n, verdict, explanation, manual}
+var nextBox = null;      // какой ящик Apron выбрал для следующего плода
+var camMessage = '';     // подсказка на экране камеры после плохого кадра
+var analysisRunning = false;
+
+function loadState() {
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      var s = JSON.parse(raw);
+      if (s && typeof s.checked === 'number') return Object.assign(baseState(), s);
+    }
+  } catch (e) {}
+  return baseState();
+}
+function saveState() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+}
+function pickState() {
+  return { checked: S.checked, defects: S.defects, offSpec: S.offSpec, submitted: S.submitted, approved: S.approved };
+}
+function stats() {
+  var c = Math.max(S.checked, 1);
+  var defectPct = S.defects / c * 100;
+  var devPct = (S.defects + S.offSpec) / c * 100;
+  var status = devPct > CONFIG.tolerance ? 'over' : (devPct >= CONFIG.warnFrom ? 'close' : 'ok');
+  return {
+    defectPct: defectPct,
+    devPct: devPct,
+    status: status,
+    done: S.checked >= CONFIG.sampleTotal,
+    risk: status === 'ok' ? 0 : CONFIG.revenue * devPct / 100
+  };
+}
+function randomBox() {
+  return { p: 1 + Math.floor(Math.random() * CONFIG.pallets), b: 1 + Math.floor(Math.random() * CONFIG.boxesPerPallet) };
+}
+function boxText(x) { return 'паллета ' + x.p + ', ящик ' + x.b; }
+function statusClass(st) { return st === 'ok' ? 's-ok' : (st === 'close' ? 's-close' : 's-over'); }
+function statusColor(st) { return st === 'ok' ? 'var(--good)' : (st === 'close' ? 'var(--warn)' : 'var(--bad)'); }
+
+/* ================= Навигация ================= */
+var ROUTES = ['supplier', 'camera', 'analysis', 'result', 'nolink', 'rc', 'passport'];
+var route = '';
+function go(r) {
+  if (location.hash !== '#' + r) location.hash = r;
+  else show(r);
+}
+function show(r) {
+  if (ROUTES.indexOf(r) < 0) r = 'supplier';
+  if ((r === 'result' && !(current && current.verdict)) || (r === 'nolink' && !current) || (r === 'analysis' && !analysisRunning)) r = 'supplier';
+  if (r !== 'camera') Camera.stop();
+  route = r;
+  $$('.screen').forEach(function (el) { el.classList.toggle('active', el.id === 's-' + r); });
+  window.scrollTo(0, 0);
+  if (r === 'supplier') renderSupplier();
+  if (r === 'camera') enterCamera();
+  if (r === 'result') renderResult();
+  if (r === 'nolink') renderNolink();
+  if (r === 'rc') renderRC(false);
+  if (r === 'passport') renderPassport();
+}
+window.addEventListener('hashchange', function () { show(location.hash.slice(1)); });
+function rerender(fresh) {
+  if (route === 'supplier') renderSupplier();
+  if (route === 'rc') renderRC(fresh);
+  if (route === 'passport') renderPassport();
+}
+
+/* ================= Экран поставщика ================= */
+function renderSupplier() {
+  var st = stats();
+  $('#sup-count').textContent = (st.done ? 12 : 11) + ' из 12';
+  $('#sup-progress').style.width = (st.done ? 100 : 91.67) + '%';
+  var text, cta = $('#sup-cta');
+  cta.disabled = false;
+  if (!st.done) {
+    text = 'Замеры и документы в норме. Осталась визуальная проверка пробы: ' + S.checked + ' из ' + CONFIG.sampleTotal + ' плодов.';
+    cta.textContent = 'Проверить плод';
+    cta.dataset.action = 'check';
+  } else if (S.approved) {
+    text = 'РЦ согласовал партию: машина может выезжать.';
+    cta.textContent = 'Согласовано: машина выезжает';
+    cta.disabled = true;
+  } else if (S.submitted) {
+    text = 'Партия отправлена на согласование в РЦ. Ждём ответа.';
+    cta.textContent = 'Ждём согласования РЦ';
+    cta.disabled = true;
+  } else {
+    text = 'Все пункты закрыты, проба проверена целиком.';
+    cta.textContent = st.status === 'over' ? 'Пересобрать партию' : 'Отправить на согласование';
+    cta.dataset.action = st.status === 'over' ? 'rebuild' : 'submit';
+  }
+  $('#sup-text').textContent = text;
+  $('#sup-pct').textContent = pct(st.defectPct);
+  var stEl = $('#sup-status');
+  stEl.textContent = STATUS[st.status];
+  stEl.className = 'status ' + statusClass(st.status);
+  var fill = $('#sup-fill');
+  fill.style.width = Math.min(st.devPct / 15, 1) * 100 + '%';
+  fill.style.backgroundColor = statusColor(st.status);
+  $('#sup-checked').textContent = S.checked + ' из ' + CONFIG.sampleTotal + ' плодов';
+  $('#sup-off').textContent = S.offSpec ? S.offSpec + ' шт.' : 'нет';
+  $('#sup-risk').textContent = st.risk ? 'до ' + rub(st.risk) : '0 ₽';
+  var note = {
+    ok: 'Можно везти в сеть «Город»: по прогнозу партию примут полностью.',
+    close: 'Близко к допуску: лучше досортировать перед отгрузкой, иначе возможен срез.',
+    over: 'Выше допуска: пересоберите партию, уберите брак и плоды не по критериям, затем проверьте пробу заново.'
+  };
+  $('#sup-note').textContent = note[st.status];
+}
+function onSupplierCta() {
+  var a = $('#sup-cta').dataset.action;
+  if (a === 'check') { go('camera'); return; }
+  if (a === 'submit') {
+    S.submitted = true; S.v = Date.now(); saveState();
+    Sync.send({ t: 'state', s: pickState(), ts: S.v });
+    toast('Партия отправлена на согласование в РЦ');
+    renderSupplier();
+    return;
+  }
+  if (a === 'rebuild') {
+    resetDemo('Партия пересобрана: начинаем пробу заново');
+  }
+}
+
+/* ================= Камера ================= */
+var Camera = {
+  stream: null,
+  start: function () {
+    var self = this;
+    var video = $('#cam-video');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject(new Error('no-camera'));
+    self.stop();
+    return navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 1280 } }
+    }).then(function (stream) {
+      if (route !== 'camera') { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      self.stream = stream;
+      video.muted = true;
+      video.setAttribute('playsinline', '');
+      video.srcObject = stream;
+      return video.play().catch(function () {});
+    });
+  },
+  stop: function () {
+    if (this.stream) { this.stream.getTracks().forEach(function (t) { t.stop(); }); this.stream = null; }
+    var v = $('#cam-video');
+    if (v) v.srcObject = null;
+  },
+  capture: function () {
+    var v = $('#cam-video');
+    var w = v.videoWidth, h = v.videoHeight;
+    if (!this.stream || !w || !h) return null;
+    var side = Math.min(w, h);
+    var c = document.createElement('canvas');
+    c.width = 720; c.height = 720;
+    c.getContext('2d').drawImage(v, (w - side) / 2, (h - side) / 2, side, side, 0, 0, 720, 720);
+    return c.toDataURL('image/jpeg', 0.85);
+  }
+};
+var camMode = 'live';
+function enterCamera() {
+  if (stats().done) { toast('Проба уже проверена целиком'); go('supplier'); return; }
+  if (!nextBox) nextBox = randomBox();
+  $('#cam-count').textContent = 'Плод ' + (S.checked + 1) + ' из ' + CONFIG.sampleTotal;
+  $('#cam-box').textContent = 'Apron выбрал: ' + boxText(nextBox);
+  var hint = $('#cam-hint');
+  hint.textContent = camMessage || 'Возьмите плод из этого ящика и положите на светлый фон, чтобы он целиком попал в рамку.';
+  hint.classList.toggle('warn', !!camMessage);
+  camMessage = '';
+  var video = $('#cam-video'), still = $('#cam-still'), shot = $('#cam-shot');
+  video.hidden = false; still.hidden = true;
+  shot.textContent = 'Сделать снимок';
+  camMode = 'live';
+  Camera.start().catch(function () {
+    if (route !== 'camera') return;
+    camMode = 'file';
+    video.hidden = true;
+    still.src = DEMO_PHOTO; still.hidden = false;
+    hint.classList.remove('warn');
+    hint.textContent = 'Камера недоступна в этом браузере. Сфотографируйте плод или возьмите демо-фото. Лучше открыть ссылку в Safari или Chrome.';
+    shot.textContent = 'Сфотографировать плод';
+  });
+}
+function onShot() {
+  if (camMode === 'file') { $('#cam-file').click(); return; }
+  var photo = Camera.capture();
+  if (!photo) { toast('Камера ещё запускается, нажмите ещё раз'); return; }
+  proceed(photo);
+}
+function onFile(e) {
+  var f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    squareImage(reader.result, 720, 0.85).then(proceed).catch(function () { toast('Не получилось открыть фото'); });
+  };
+  reader.readAsDataURL(f);
+}
+function loadImage(src) {
+  return new Promise(function (res, rej) {
+    var img = new Image();
+    img.onload = function () { res(img); };
+    img.onerror = rej;
+    img.src = src;
+  });
+}
+function squareImage(src, size, q) {
+  return loadImage(src).then(function (img) {
+    var w = img.naturalWidth, h = img.naturalHeight, side = Math.min(w, h);
+    var c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    c.getContext('2d').drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, size, size);
+    return c.toDataURL('image/jpeg', q);
+  });
+}
+
+/* ================= Анализ ================= */
+var ICONS = {
+  done: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#1C1C1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 10.5 L8.5 14.5 L15.5 6.5"></path></svg>',
+  active: '<svg class="spin" width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="#E2E0DA" stroke-width="2"></circle><path d="M10 3 A7 7 0 0 1 17 10" stroke="#1C1C1A" stroke-width="2" stroke-linecap="round"></path></svg>',
+  pending: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="#CFCDC6" stroke-width="2"></circle></svg>'
+};
+function setStep(i, state, note) {
+  var li = $('#an-steps li[data-i="' + i + '"]');
+  li.className = state;
+  li.querySelector('.ic').innerHTML = ICONS[state];
+  li.querySelector('.t').textContent = note || '';
+}
+function proceed(photo) {
+  Camera.stop();
+  current = { photo: photo, box: nextBox || randomBox(), n: S.checked + 1, verdict: null, explanation: '', manual: false };
+  nextBox = null;
+  runAnalysis();
+}
+// Простая проверка кадра в браузере: есть ли в центре красный или розовый плод и не слишком ли темно
+function inspect(src) {
+  return loadImage(src).then(function (img) {
+    var n = 64, c = document.createElement('canvas');
+    c.width = n; c.height = n;
+    var x = c.getContext('2d');
+    var w = img.naturalWidth, h = img.naturalHeight, s = Math.min(w, h) * 0.7;
+    x.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, n, n);
+    var d = x.getImageData(0, 0, n, n).data, red = 0, lum = 0;
+    for (var i = 0; i < d.length; i += 4) {
+      var r = d[i], g = d[i + 1], b = d[i + 2];
+      lum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      if (r > 110 && r > g * 1.35 && r > b * 1.3) red++;
+    }
+    var px = n * n;
+    return { present: red / px > 0.08, dark: lum / px < 40 };
+  }).catch(function () { return { present: true, dark: false }; });
+}
+function analyzeRemote(photo) {
+  var ctrl = new AbortController();
+  var timer = setTimeout(function () { ctrl.abort(); }, CONFIG.analyzeTimeoutMs);
+  return fetch(CONFIG.analyzeUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: photo, product: 'Томаты розовые', chain: 'Город', criteria: ['калибр', 'зрелость', 'форма', 'дефекты'] }),
+    signal: ctrl.signal
+  }).then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function (j) {
+    if (['good', 'offspec', 'defect', 'bad_photo'].indexOf(j.verdict) < 0) throw new Error('bad verdict');
+    return j;
+  }).finally(function () { clearTimeout(timer); });
+}
+function simulate(mode, local) {
+  if (mode === 'auto') {
+    if (local.dark) return { verdict: 'bad_photo', explanation: 'Плохой кадр: слишком темно. Включите свет и снимите ещё раз.' };
+    if (!local.present) return { verdict: 'bad_photo', explanation: 'Плохой кадр: плод не найден. Наведите камеру так, чтобы плод целиком был в рамке.' };
+    return { verdict: 'good' };
+  }
+  return { verdict: mode };
+}
+function runAnalysis() {
+  var cur = current;
+  analysisRunning = true;
+  $('#an-photo').src = cur.photo;
+  $('#an-count').textContent = 'Плод ' + cur.n + ', ' + boxText(cur.box);
+  setStep(1, 'active'); setStep(2, 'pending'); setStep(3, 'pending');
+  go('analysis');
+  var t0 = performance.now();
+  var mode = Demo.mode;
+  inspect(cur.photo).then(function (local) {
+    return sleep(350).then(function () {
+      setStep(1, 'done', nf1.format((performance.now() - t0) / 1000) + ' с');
+      setStep(2, 'active');
+      if (mode === 'nolink') return sleep(1400).then(function () { throw new Error('forced'); });
+      if (mode === 'auto' && CONFIG.analyzeUrl) {
+        if (local.dark || !local.present) return simulate('auto', local);
+        return analyzeRemote(cur.photo);
+      }
+      return sleep(1000).then(function () { return simulate(mode, local); });
+    });
+  }).then(function (res) {
+    if (current !== cur) return;
+    setStep(2, 'done'); setStep(3, 'active');
+    return sleep(650).then(function () {
+      setStep(3, 'done');
+      return sleep(250);
+    }).then(function () {
+      analysisRunning = false;
+      if (res.verdict === 'bad_photo') {
+        nextBox = cur.box; current = null;
+        camMessage = res.explanation || 'Плохой кадр: снимите плод ещё раз.';
+        go('camera');
+        return;
+      }
+      applyVerdict(res.verdict, res.explanation, false);
+    });
+  }).catch(function () {
+    analysisRunning = false;
+    if (current !== cur) return;
+    go('nolink');
+  });
+}
+function makeThumb(src, size, q) { return squareImage(src, size, q).catch(function () { return ''; }); }
+function applyVerdict(verdict, explanation, manual) {
+  var cur = current;
+  if (!cur || cur.verdict) return;
+  cur.verdict = verdict;
+  cur.explanation = explanation || EXPLAIN[verdict];
+  cur.manual = !!manual;
+  S.checked = Math.min(CONFIG.sampleTotal, S.checked + 1);
+  if (verdict === 'defect') S.defects++;
+  if (verdict === 'offspec') S.offSpec++;
+  S.v = Date.now();
+  var ts = S.v;
+  Promise.all([makeThumb(cur.photo, 160, 0.72), makeThumb(cur.photo, 44, 0.55)]).then(function (t) {
+    var fruit = { n: cur.n, box: cur.box, verdict: verdict, thumb: t[0], ts: ts };
+    S.fruits.push(fruit);
+    S.fruits = S.fruits.slice(-12);
+    saveState();
+    Sync.send({ t: 'state', s: pickState(), f: { n: cur.n, box: cur.box, verdict: verdict, thumb: t[1], ts: ts }, ts: ts });
+  });
+  saveState();
+  go('result');
+}
+
+/* ================= Результат и «нет связи» ================= */
+function renderResult() {
+  var cur = current, st = stats();
+  $('#res-count').textContent = 'Плод ' + cur.n + ', ' + boxText(cur.box);
+  $('#res-photo').src = cur.photo;
+  var t = $('#res-title');
+  t.textContent = TITLES[cur.verdict];
+  t.className = 'verdict ' + CLASSES[cur.verdict];
+  $('#res-text').textContent = cur.explanation + (cur.manual ? ' Отмечено вручную.' : '');
+  $('#res-defect').textContent = pct(st.defectPct);
+  $('#res-off-row').hidden = !S.offSpec;
+  $('#res-off').textContent = S.offSpec + ' из ' + S.checked;
+  var next = $('#res-next');
+  next.textContent = st.done ? 'Проба проверена: к партии' : 'Проверить следующий плод';
+  next.dataset.target = st.done ? 'supplier' : 'camera';
+}
+function renderNolink() {
+  $('#nl-photo').src = current.photo;
+  $('#nl-count').textContent = 'Плод ' + current.n + ', ' + boxText(current.box);
+}
+
+/* ================= РЦ ================= */
+function lastFruit() { return S.fruits.length ? S.fruits[S.fruits.length - 1] : null; }
+function timeText(ts) {
+  var diff = (Date.now() - ts) / 1000;
+  if (diff < 90) return 'Только что';
+  var d = new Date(ts);
+  return 'В ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function renderRC(fresh) {
+  var st = stats(), f = lastFruit(), wrap = $('#rc-notice-wrap');
+  if (f) {
+    wrap.innerHTML = '';
+    var box = document.createElement('div');
+    box.className = 'notice' + (fresh ? ' pop' : '');
+    box.setAttribute('role', 'status');
+    var img = document.createElement('img');
+    img.alt = '';
+    img.src = f.thumb || DEMO_PHOTO;
+    var l = document.createElement('div');
+    l.className = 'notice-l';
+    l.innerHTML = '<span class="kicker"></span><span class="notice-t"></span><span class="small" style="color:var(--soft)"></span>';
+    l.children[0].textContent = timeText(f.ts) + ', «Южная гряда»';
+    l.children[1].textContent = 'Плод ' + f.n + ': ' + SHORT[f.verdict];
+    l.children[2].textContent = 'Брак в пробе ' + pct(st.defectPct);
+    box.appendChild(img); box.appendChild(l);
+    wrap.appendChild(box);
+  } else {
+    wrap.innerHTML = '';
+  }
+  $('#rc-tom-v').textContent = pct(st.defectPct);
+  var n;
+  if (!st.done) n = 'идёт проверка, ' + S.checked + ' из ' + CONFIG.sampleTotal;
+  else if (S.approved) n = 'выезд согласован';
+  else if (S.submitted) n = 'ждёт согласования';
+  else n = 'проба проверена';
+  $('#rc-tom-n').textContent = n;
+}
+function renderPassport() {
+  var st = stats();
+  $('#ps-pct').textContent = pct(st.defectPct);
+  var s = $('#ps-status');
+  s.textContent = STATUS[st.status];
+  s.className = 'status ' + statusClass(st.status);
+  $('#ps-sub').textContent = 'Проверено ' + S.checked + ' из ' + CONFIG.sampleTotal + ' плодов, допуск сети 10 %. ' +
+    (S.offSpec ? 'Не по критериям сети: ' + S.offSpec + '.' : 'Плодов не по критериям сети нет.');
+  var fill = $('#ps-fill');
+  fill.style.width = Math.min(st.devPct / 15, 1) * 100 + '%';
+  fill.style.backgroundColor = statusColor(st.status);
+
+  var how = {
+    ok: 'Стандартная приёмка: вскрыть 5 мест.',
+    close: 'Усиленная приёмка: вскрыть 10 мест, начать с ящиков, где нашли отклонения.',
+    over: 'Полная проверка: партия выше допуска, решение о приёмке после осмотра.'
+  };
+  $('#ps-how').textContent = how[st.status];
+  var watch = [];
+  if (CONFIG.preDefects) watch.push('Паллета 7: в её ящике был плод с трещиной.');
+  S.fruits.filter(function (x) { return x.verdict !== 'good'; }).slice(-3).forEach(function (x) {
+    watch.push('Паллета ' + x.box.p + ', ящик ' + x.box.b + ': ' + SHORT[x.verdict] + '.');
+  });
+  $('#ps-watch').textContent = watch.length ? watch.join(' ') : 'Отклонений в пробе нет.';
+
+  var wrap = $('#ps-approve-wrap');
+  wrap.innerHTML = '';
+  if (S.submitted && !S.approved) {
+    var card = document.createElement('section');
+    card.className = 'approve';
+    card.innerHTML = '<h2 class="h2">Согласование до выезда</h2><p class="small" style="color:var(--soft)">Поставщик проверил пробу целиком и ждёт ответа.</p>' +
+      '<button class="btn" type="button" id="ps-approve">Согласовать выезд</button><button class="btn-text" type="button" id="ps-return">Вернуть на досортировку</button>';
+    wrap.appendChild(card);
+    $('#ps-approve').addEventListener('click', function () {
+      S.approved = true; S.v = Date.now(); saveState();
+      Sync.send({ t: 'state', s: pickState(), ts: S.v });
+      toast('Выезд согласован, поставщик видит ответ');
+      renderPassport();
+    });
+    $('#ps-return').addEventListener('click', function () {
+      S.submitted = false; S.v = Date.now(); saveState();
+      Sync.send({ t: 'state', s: pickState(), ts: S.v });
+      toast('Партия возвращена на досортировку');
+      renderPassport();
+    });
+  } else if (S.approved) {
+    var ok = document.createElement('p');
+    ok.className = 'note s-ok';
+    ok.style.fontWeight = '600';
+    ok.textContent = 'Выезд согласован.';
+    wrap.appendChild(ok);
+  }
+
+  $('#ps-photo-count').textContent = S.checked + ' фото в пробе';
+  var grid = $('#ps-photos');
+  grid.innerHTML = '';
+  var items = S.fruits.slice().reverse().slice(0, 7).map(function (x) {
+    return { src: x.thumb || DEMO_PHOTO, cap: 'Плод ' + x.n + ': ' + SHORT[x.verdict] };
+  });
+  items.push({ src: DEMO_PHOTO, cap: 'Плод ' + Math.min(CONFIG.preChecked, S.checked) + ': годен' });
+  items.slice(0, 8).forEach(function (it) {
+    var fig = document.createElement('figure');
+    var img = document.createElement('img');
+    img.src = it.src; img.alt = it.cap; img.loading = 'lazy';
+    var cap = document.createElement('figcaption');
+    cap.textContent = it.cap;
+    fig.appendChild(img); fig.appendChild(cap);
+    grid.appendChild(fig);
+  });
+}
+
+/* ================= Синхронизация ================= */
+var Sync = {
+  topic: '',
+  status: 'выключена',
+  seen: {},
+  bc: null,
+  init: function () {
+    var self = this;
+    var room = (params.get('room') || CONFIG.room || 'apron-demo').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+    self.topic = room || 'apron-demo';
+    try {
+      self.bc = new BroadcastChannel('apron-' + self.topic);
+      self.bc.onmessage = function (e) { self.receive(e.data, false); };
+    } catch (e) {}
+    if (!CONFIG.sync) { self.status = 'только на этом устройстве'; return; }
+    self.status = 'подключаемся';
+    self.catchUp();
+    self.connect();
+  },
+  url: function (p) { return CONFIG.syncServer.replace(/\/$/, '') + '/' + encodeURIComponent(this.topic) + (p || ''); },
+  connect: function () {
+    var self = this;
+    try {
+      var es = new EventSource(self.url('/sse'));
+      es.onopen = function () { self.status = 'онлайн'; Demo.refresh(); };
+      es.onerror = function () { self.status = 'нет соединения, работает на этом устройстве'; Demo.refresh(); };
+      es.onmessage = function (e) {
+        try {
+          var m = JSON.parse(e.data);
+          if (m.event === 'message' && m.message) self.receive(JSON.parse(m.message), false);
+        } catch (err) {}
+      };
+    } catch (e) { self.status = 'недоступна'; }
+  },
+  catchUp: function () {
+    var self = this;
+    fetch(self.url('/json?poll=1&since=6h'), { cache: 'no-store' }).then(function (r) {
+      return r.ok ? r.text() : '';
+    }).then(function (txt) {
+      txt.split('\n').forEach(function (line) {
+        if (!line) return;
+        try {
+          var m = JSON.parse(line);
+          if (m.event === 'message' && m.message) self.receive(JSON.parse(m.message), true);
+        } catch (e) {}
+      });
+      rerender(false);
+    }).catch(function () {});
+  },
+  send: function (evt) {
+    evt.from = clientId;
+    evt.ts = evt.ts || Date.now();
+    this.seen[evt.from + ':' + evt.ts + ':' + evt.t] = true;
+    try { if (this.bc) this.bc.postMessage(evt); } catch (e) {}
+    if (!CONFIG.sync) return;
+    var body = JSON.stringify(evt);
+    if (body.length > 3800 && evt.f) { delete evt.f.thumb; body = JSON.stringify(evt); }
+    fetch(this.url(''), { method: 'POST', body: body }).catch(function () {});
+  },
+  receive: function (evt, silent) {
+    if (!evt || typeof evt !== 'object' || evt.from === clientId) return;
+    var key = evt.from + ':' + evt.ts + ':' + evt.t;
+    if (this.seen[key]) return;
+    this.seen[key] = true;
+    var fresh = false;
+    if (evt.t === 'reset') {
+      if ((evt.ts || 0) >= (S.v || 0)) { S = baseState(); S.v = evt.ts || Date.now(); }
+    } else if (evt.t === 'state' && evt.s) {
+      if ((evt.ts || 0) >= (S.v || 0)) {
+        ['checked', 'defects', 'offSpec'].forEach(function (k) { if (typeof evt.s[k] === 'number') S[k] = evt.s[k]; });
+        S.submitted = !!evt.s.submitted;
+        S.approved = !!evt.s.approved;
+        S.v = evt.ts || Date.now();
+      }
+      if (evt.f && !S.fruits.some(function (x) { return x.ts === evt.f.ts && x.n === evt.f.n; })) {
+        S.fruits.push(evt.f);
+        S.fruits.sort(function (a, b) { return a.ts - b.ts; });
+        S.fruits = S.fruits.slice(-12);
+        fresh = !silent;
+      }
+    } else {
+      return;
+    }
+    saveState();
+    if (!silent) rerender(fresh);
+    if (fresh && route !== 'rc' && route !== 'passport' && (route === 'supplier')) {
+      // поставщик на другом устройстве: тихо обновили цифры
+    }
+  }
+};
+
+/* ================= Демо-панель ================= */
+var Demo = {
+  mode: 'auto',
+  init: function () {
+    var self = this;
+    if (params.has('demo')) $('#demo-fab').hidden = false;
+    $$('.wordmark').forEach(function (w) {
+      var taps = 0, timer = null;
+      w.addEventListener('click', function () {
+        taps++;
+        clearTimeout(timer);
+        timer = setTimeout(function () { taps = 0; }, 650);
+        if (taps >= 3) { taps = 0; self.open(); }
+      });
+    });
+    $('#demo-fab').addEventListener('click', function () { self.open(); });
+    $('#demo-close').addEventListener('click', function () { self.close(); });
+    $$('#demo-modes button').forEach(function (b) {
+      b.addEventListener('click', function () { self.mode = b.dataset.mode; self.refresh(); });
+    });
+    $('#demo-reset').addEventListener('click', function () { self.close(); resetDemo('Проба сброшена: 24 из 30, 1 брак'); });
+  },
+  open: function () { $('#demo').hidden = false; this.refresh(); },
+  close: function () { $('#demo').hidden = true; },
+  refresh: function () {
+    var self = this;
+    $$('#demo-modes button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.mode === self.mode)); });
+    $('#demo-sync').textContent = 'Синхронизация: ' + Sync.status + '. Комната: ' + Sync.topic + '.';
+  }
+};
+function resetDemo(msg) {
+  S = baseState();
+  S.v = Date.now();
+  current = null; nextBox = null;
+  saveState();
+  Sync.send({ t: 'reset', ts: S.v });
+  toast(msg);
+  if (route === 'rc' || route === 'passport') rerender(false); else go('supplier');
+  if (route === 'supplier') renderSupplier();
+}
+
+/* ================= Тост ================= */
+var toastTimer = null;
+function toast(msg) {
+  var el = $('#toast');
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.hidden = true; }, 3200);
+}
+
+/* ================= Запуск ================= */
+function init() {
+  document.addEventListener('click', function (e) {
+    var g = e.target.closest('[data-go]');
+    if (g) { e.preventDefault(); go(g.dataset.go); return; }
+    var m = e.target.closest('[data-mark]');
+    if (m && current) { applyVerdict(m.dataset.mark, EXPLAIN[m.dataset.mark], true); }
+  });
+  $('#sup-cta').addEventListener('click', onSupplierCta);
+  $('#cam-shot').addEventListener('click', onShot);
+  $('#cam-file').addEventListener('change', onFile);
+  $('#cam-demo').addEventListener('click', function () { proceed(DEMO_PHOTO); });
+  $('#res-next').addEventListener('click', function () { go(this.dataset.target || 'supplier'); });
+  $('#nl-retry').addEventListener('click', function () {
+    if (current) nextBox = current.box;
+    current = null;
+    go('camera');
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) Camera.stop();
+    else if (route === 'camera' && camMode === 'live') Camera.start().catch(function () {});
+  });
+  window.addEventListener('storage', function (e) {
+    if (e.key === STORE_KEY) { S = loadState(); rerender(false); }
+  });
+  setInterval(function () { if (route === 'rc') renderRC(false); }, 30000);
+
+  Sync.init();
+  Demo.init();
+  var r = location.hash.slice(1);
+  if (ROUTES.indexOf(r) < 0) r = params.get('role') === 'rc' ? 'rc' : 'supplier';
+  if (r === 'analysis' || r === 'result' || r === 'nolink') r = 'supplier';
+  history.replaceState(null, '', location.pathname + location.search + '#' + r);
+  show(r);
+}
+init();
+})();
+</script>
+</body>
+</html>
