@@ -1,0 +1,23 @@
+'use strict';
+// Relative URLs preserve the existing GitHub Pages project path and QR links.
+var CACHE = 'apron-personal-v2-20261101';
+var FILES = ['./', './index.html', './assets/app.css', './assets/core.js', './assets/app.js', './assets/test-tomato.jpg', './fonts/onest-400.ttf', './fonts/onest-500.ttf', './fonts/onest-600.ttf'];
+self.addEventListener('install', function (event) {
+  event.waitUntil(caches.open(CACHE).then(function (cache) { return cache.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
+});
+self.addEventListener('activate', function (event) {
+  event.waitUntil(caches.keys().then(function (names) { return Promise.all(names.filter(function (name) { return name.startsWith('apron-personal-') && name !== CACHE; }).map(function (name) { return caches.delete(name); })); }).then(function () { return self.clients.claim(); }));
+});
+self.addEventListener('fetch', function (event) {
+  var request = event.request, url = new URL(request.url);
+  // Never cache submitted images or calls to the future model relay.
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  var key = request.mode === 'navigate' ? new URL('./index.html', self.location.href).href : request;
+  event.respondWith(fetch(request).then(function (response) {
+    if (response.ok && (request.mode === 'navigate' || FILES.some(function (file) { return new URL(file, self.location.href).href === url.href; }))) {
+      var copy = response.clone();
+      event.waitUntil(caches.open(CACHE).then(function (cache) { return cache.put(key, copy); }));
+    }
+    return response;
+  }).catch(function () { return caches.open(CACHE).then(function (cache) { return cache.match(key); }).then(function (response) { return response || new Response('Нет соединения. Откройте Apron с интернетом один раз перед показом.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }); }); }));
+});

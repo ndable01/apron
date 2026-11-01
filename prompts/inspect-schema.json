@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ApronInspectResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "confidence", "title", "explanation", "checks", "findings", "not_visible", "ripeness", "photo_issue", "retake_hint", "label_text", "rc_hint", "note"],
+  "properties": {
+    "verdict": { "type": "string", "enum": ["good", "offspec", "defect", "bad_photo", "not_tomato"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "title": { "type": "string", "maxLength": 40 },
+    "explanation": { "type": "string", "maxLength": 200 },
+    "checks": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion", "status", "note"],
+        "properties": {
+          "criterion": { "type": "string", "enum": ["целостность", "гниль и плесень", "повреждения", "свежесть", "форма", "окраска и зрелость", "чистота", "калибр"] },
+          "status": { "type": "string", "enum": ["ok", "fail", "warn", "not_visible"] },
+          "note": { "type": "string", "maxLength": 80 }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "location", "size", "severity", "counts_as"],
+        "properties": {
+          "type": { "type": "string", "enum": ["открытая трещина", "зажившая трещина", "порез или прокол", "гниль", "вершинная гниль", "плесень", "вмятина", "перезревание", "увядание", "подмораживание", "солнечный ожог", "вредители", "зелёная спинка", "незрелость", "неоднородная окраска", "деформация", "пробковое образование", "шрам", "загрязнение", "другое"] },
+          "location": { "type": "string", "enum": ["у плодоножки", "на боку", "на вершине", "по всему плоду", "не определить"] },
+          "size": { "type": "string", "maxLength": 60 },
+          "severity": { "type": "string", "enum": ["незначительный", "заметный", "сильный"] },
+          "counts_as": { "type": "string", "enum": ["defect", "offspec", "none"] }
+        }
+      }
+    },
+    "not_visible": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 40 } },
+    "ripeness": { "type": ["string", "null"], "enum": ["незрелый", "частично окрашен", "зрелый", "перезрелый", null] },
+    "photo_issue": { "type": ["string", "null"], "enum": ["размыто", "темно", "пересвет", "плод обрезан", "плод закрыт", "несколько плодов", "снимок экрана", null] },
+    "retake_hint": { "type": ["string", "null"], "maxLength": 80 },
+    "label_text": { "type": ["string", "null"], "maxLength": 60 },
+    "rc_hint": { "type": ["string", "null"], "maxLength": 120 },
+    "note": { "type": ["string", "null"], "maxLength": 120 }
+  }
+}
