@@ -53,7 +53,7 @@
     if (b.distance !== null) description.push(number.format(b.distance) + ' км');
     var values = { title: batchTitle(), destination: 'Сеть «' + b.chain + '», ' + b.rc, description: description.join('. '), rc: b.rc, code: 'Партия ' + b.code, supplierArrival: b.supplier + (b.arrival ? '. Прибытие ' + b.arrival : ''), reportHeading: batchTitle() + '. ' + b.supplier + ', сеть «' + b.chain + '»' };
     $$('[data-batch]').forEach(function (n) { n.textContent = values[n.dataset.batch]; });
-    $('#sample-origin').textContent = b.example ? 'Пример партии: первые 28 плодов заданы заранее. Создайте свою партию, чтобы начать проверку с нуля.' : 'Проба вашей партии. Фото, отметки и замеры сохраняются на этом устройстве.';
+    $('#sample-origin').textContent = b.example ? (S.seed.checked ? 'Пример партии: первые ' + S.seed.checked + ' плодов заданы заранее. Создайте свою партию, чтобы начать проверку с нуля.' : 'Новая проверка на данных примера. Свои данные можно указать в новой партии.') : 'Проба вашей партии. Фото, отметки и замеры сохраняются на этом устройстве.';
     $('#report-origin').hidden = !S.seed.checked;
     $('#report-origin').textContent = 'Исходные ' + S.seed.checked + ' плодов заданы в примере, среди них ' + S.seed.defects + ' брак. Фото этой части пробы нет.';
     var measured = Object.values(b.measurements).filter(function (v) { return v !== null; }).length;
@@ -349,7 +349,7 @@
   function support(target) {
     target.replaceChildren(); var b = S.batch;
     var groups = [
-      ['Замеры поставщика', MEASUREMENTS.map(function (m) { return [m[1], b.measurements[m[0]] === null ? 'Не измеряли' : precise.format(b.measurements[m[0]]) + ' ' + m[2], b.example ? 'Пример показаний, ' + m[3] : 'Введено поставщиком, ' + m[3]]; })],
+      ['Замеры поставщика', MEASUREMENTS.map(function (m) { return [m[1], b.measurements[m[0]] === null ? 'Не измеряли' : precise.format(b.measurements[m[0]]) + ' ' + m[2], b.example && b.measurementsExample !== false ? 'Пример показаний, ' + m[3] : 'Введено поставщиком, ' + m[3]]; })],
       ['Документы', DOCUMENTS.map(function (d) { return [d[1], b.documents[d[0]] ? 'Подготовлен' : 'Не отмечен', 'Наличие отмечает поставщик']; })],
       ['Упаковка и рейс', [['Паллеты и тара', b.packaging ? 'Проверены' : 'Не отмечено', 'Отметка поставщика'], ['Паллет в партии', String(b.pallets), 'Данные партии'], ['Выезд', b.departure || 'Не указан', 'Расписание поставщика'], ['Прибытие', b.arrival || 'Не указано', 'Расписание поставщика']]]
     ];
@@ -371,7 +371,7 @@
     go('batch-edit');
   }
   function fillBatchForm() {
-    if (!draftBatch) { editingNew = false; draftBatch = JSON.parse(JSON.stringify(S.batch)); }
+    if (!draftBatch) { editingNew = false; draftBatch = JSON.parse(JSON.stringify(S.batch)); draftBatch.sampleTotal = S.goal; }
     var f = $('#batch-form');
     ['code', 'product', 'supplier', 'chain', 'rc', 'weight', 'revenue', 'sampleTotal', 'grade', 'rules', 'pallets', 'boxesPerPallet', 'departure', 'arrival', 'distance', 'ramp', 'slotTime'].forEach(function (k) { f.elements[k].value = draftBatch[k] === null ? '' : draftBatch[k]; });
     f.elements.defectTolerance.value = draftBatch.tolerance.defect; f.elements.offspecTolerance.value = draftBatch.tolerance.offspec;
@@ -487,7 +487,7 @@
   $('#measurements-form').addEventListener('submit', function (e) {
     e.preventDefault(); var f = this, b = JSON.parse(JSON.stringify(S.batch));
     MEASUREMENTS.forEach(function (m) { b.measurements[m[0]] = f.elements[m[0]].value === '' ? null : Number(f.elements[m[0]].value); });
-    DOCUMENTS.forEach(function (d) { b.documents[d[0]] = f.elements[d[0]].checked; }); b.packaging = f.elements.packaging.checked;
+    DOCUMENTS.forEach(function (d) { b.documents[d[0]] = f.elements[d[0]].checked; }); b.packaging = f.elements.packaging.checked; b.measurementsExample = false;
     try { Core.validateBatch(b); S.batch = b; S.decision = null; event('Замеры и готовность документов обновлены'); save(); go('supplier'); toast('Замеры сохранены'); }
     catch (error) { $('#measurements-error').hidden = false; $('#measurements-error').textContent = error.message; }
   });
