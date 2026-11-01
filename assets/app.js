@@ -11,6 +11,10 @@
   var route = '', lastResultId = null, cameraStream = null, cameraAttempt = 0, analysisAttempt = 0, controller = null;
   var cameraMessage = '', toastTimer = null, wakeLock = null, resultBusy = false;
   var editingNew = false, draftBatch = null;
+  var Docs = window.ApronDocuments, documentFiles = [], documentBatch = '', documentLoad = null, documentLoadError = '';
+  var documentDraft = null, documentBaseline = [], documentDraftId = 0, documentPicker = null, documentBusy = false, measurementsSaving = false;
+  var documentManualDraft = {};
+  var documentURLs = new Map();
   var LIBRARY_PREFIX = 'apron-saved-batch-v1:';
   var number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
   var decimal = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
@@ -33,15 +37,18 @@
     if (text !== undefined) n.textContent = text;
     return n;
   }
-  function save() {
+  function save(forcePersist) {
     var saved = true;
     S.updatedAt = Date.now();
     try { sessionStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (error) { saved = false; }
-    if (!S.batch.example) {
-      try { localStorage.setItem(LIBRARY_PREFIX + S.batch.id, JSON.stringify(S)); localStorage.setItem('apron-last-batch-v1', S.batch.id); } catch (error) { saved = false; }
-    }
+    try {
+      if (!S.batch.example || forcePersist || localStorage.getItem(LIBRARY_PREFIX + S.batch.id)) {
+        localStorage.setItem(LIBRARY_PREFIX + S.batch.id, JSON.stringify(S)); localStorage.setItem('apron-last-batch-v1', S.batch.id);
+      }
+    } catch (error) { saved = false; }
     $('#storage-warning').hidden = saved;
     if (!saved) $('#storage-warning').textContent = 'В браузере не хватает места для сохранения. Не закрывайте эту вкладку; снимки и изменения пока доступны здесь.';
+    return saved;
   }
   function batchTitle() { return S.batch.product + ', ' + precise.format(S.batch.weight) + ' т'; }
   function specForBatch() { return { product: S.batch.product, grade: S.batch.grade, chain: S.batch.chain, chain_rules: S.batch.rules.split('\n').map(function (x) { return x.trim(); }).filter(Boolean), reference: null }; }
@@ -57,8 +64,8 @@
     $('#report-origin').hidden = !S.seed.checked;
     $('#report-origin').textContent = 'Исходные ' + S.seed.checked + ' плодов заданы в примере, среди них ' + S.seed.defects + ' брак. Фото этой части пробы нет.';
     var measured = Object.values(b.measurements).filter(function (v) { return v !== null; }).length;
-    var docs = Object.values(b.documents).filter(Boolean).length;
-    $('#support-summary').textContent = 'Замеры ' + measured + ' из 6, документы ' + docs + ' из 5' + (b.packaging ? ', упаковка отмечена' : '');
+    var docs = Object.keys(b.documents).filter(function (key) { return b.documents[key] || filesFor(key).length; }).length;
+    $('#support-summary').textContent = 'Замеры ' + measured + ' из 6, ' + (documentBatch === b.id ? 'документы ' + docs + ' из 5' : documentLoadError ? 'файлы недоступны' : 'читаем документы') + (b.packaging ? ', упаковка отмечена' : '');
     support($('#sup-support')); support($('#report-support')); method($('#sup-method')); method($('#report-method'));
   }
   function event(text) { S.events.push({ text: text, ts: Date.now() }); S.events = S.events.slice(-30); }
@@ -346,14 +353,105 @@
     ['temperature', 'Температура', '°C', 'термощуп'], ['caliber', 'Калибр', 'мм', 'линейка'], ['mass', 'Масса нетто', 'кг', 'весы'], ['firmness', 'Твёрдость', 'кг/см²', 'пенетрометр'], ['brix', 'Сахаристость', '°Bx', 'рефрактометр'], ['nitrates', 'Нитраты', 'мг/кг', 'прибор']
   ];
   var DOCUMENTS = [['declaration', 'Декларация соответствия'], ['quality', 'Паспорт качества'], ['lab', 'Протокол испытаний'], ['shipment', 'ТТН и УПД'], ['labels', 'Маркировка и даты']];
+  function filesFor(key) { return documentBatch === S.batch.id ? documentFiles.filter(function (f) { return f.category === key; }) : []; }
+  function releaseDocumentURLs(records) {
+    var ids = new Set(records.map(function (r) { return r.id; }));
+    documentURLs.forEach(function (url, id) { if (!ids.has(id)) { URL.revokeObjectURL(url); documentURLs.delete(id); } });
+  }
+  function fileURL(record) {
+    if (!documentURLs.has(record.id)) documentURLs.set(record.id, URL.createObjectURL(record.blob));
+    return documentURLs.get(record.id);
+  }
+  function fileList(records, editable, category) {
+    var list = element('ul', 'document-files');
+    records.forEach(function (record) {
+      var li = element('li', 'document-file'), info = element('div', 'document-file-info'), actions = element('div', 'document-file-actions');
+      info.append(element('p', 'document-filename', record.name), element('span', 'small muted', Docs.sizeText(record.size)));
+      if (record.type === 'application/pdf' || record.type.startsWith('image/')) {
+        var open = element('a', 'text-link', 'Открыть'); open.href = fileURL(record); open.target = '_blank'; open.rel = 'noopener noreferrer'; open.setAttribute('aria-label', 'Открыть ' + record.name); actions.append(open);
+      }
+      var download = element('a', 'text-link', 'Скачать'); download.href = fileURL(record); download.download = record.name; download.setAttribute('aria-label', 'Скачать ' + record.name); actions.append(download);
+      if (editable) {
+        var replace = element('button', 'text-link', 'Заменить'); replace.type = 'button'; replace.dataset.docReplace = record.id; replace.dataset.docCategory = category; replace.disabled = documentBusy; replace.setAttribute('aria-label', 'Заменить ' + record.name);
+        var remove = element('button', 'text-link', 'Удалить'); remove.type = 'button'; remove.dataset.docRemove = record.id; remove.dataset.docCategory = category; remove.disabled = documentBusy; remove.setAttribute('aria-label', 'Удалить ' + record.name); actions.append(replace, remove);
+      }
+      li.append(info, actions); list.append(li);
+    });
+    return list;
+  }
+  function ensureDocuments(force) {
+    var id = S.batch.id;
+    if (documentBatch === id && !force) return Promise.resolve(documentFiles);
+    if (documentLoad && documentLoad.id === id) return documentLoad.promise;
+    var job = { id: id, promise: null }; documentLoad = job; documentLoadError = '';
+    job.promise = Docs.list(id).then(function (records) {
+      if (S.batch.id === id) { documentBatch = id; documentFiles = records; documentLoadError = ''; releaseDocumentURLs(records); }
+      return records;
+    }).catch(function (error) {
+      if (S.batch.id === id) documentLoadError = 'Не удалось прочитать файлы. ' + (error && error.message || 'Хранилище недоступно.');
+      throw error;
+    }).finally(function () { if (documentLoad === job) documentLoad = null; });
+    return job.promise;
+  }
+  function renderDocumentEditor() {
+    var target = $('#document-editor'); target.replaceChildren();
+    DOCUMENTS.forEach(function (d) {
+      var records = documentDraft ? documentDraft.filter(function (r) { return r.category === d[0]; }) : [];
+      var section = element('section', 'document-item'), label = element('label', 'check-label'), input = document.createElement('input');
+      input.type = 'checkbox'; input.name = d[0]; input.checked = !!documentManualDraft[d[0]] || records.length > 0; input.disabled = records.length > 0 || documentBusy;
+      input.addEventListener('change', function () { documentManualDraft[d[0]] = this.checked; });
+      label.append(input, document.createTextNode(d[1])); section.append(label);
+      section.append(element('p', 'document-hint', records.length ? 'Файлов: ' + records.length + '. Наличие учтено по приложению.' : documentManualDraft[d[0]] ? 'Отмечено вручную. Файл не приложен.' : 'Файл не приложен.'));
+      if (records.length) section.append(fileList(records, true, d[0]));
+      var add = element('button', 'text-link', records.length ? 'Добавить ещё файл' : 'Прикрепить файл'); add.type = 'button'; add.id = 'doc-add-' + d[0]; add.dataset.docAdd = d[0]; add.disabled = !documentDraft || documentBusy || records.length >= Docs.MAX_FILES; add.setAttribute('aria-label', 'Добавить файл: ' + d[1]); section.append(add); target.append(section);
+    });
+  }
+  function loadDocumentDraft() {
+    var draftId = ++documentDraftId, batchId = S.batch.id;
+    documentDraft = null; documentBaseline = []; documentBusy = false; documentPicker = null; documentManualDraft = Object.assign({}, S.batch.documents);
+    $('#documents-status').textContent = 'Читаем документы партии'; $('#measurements-save').disabled = true; renderDocumentEditor();
+    ensureDocuments(true).then(function (records) {
+      if (route !== 'measurements' || draftId !== documentDraftId || S.batch.id !== batchId) return;
+      documentDraft = records.slice(); documentBaseline = records.map(function (r) { return r.id; });
+      $('#documents-status').textContent = 'Файлы хранятся на этом устройстве и доступны в отчёте РЦ.'; renderDocumentEditor(); renderBatchInfo();
+    }).catch(function () {
+      if (route !== 'measurements' || draftId !== documentDraftId || S.batch.id !== batchId) return;
+      $('#documents-status').textContent = documentLoadError + ' Можно сохранить замеры и ручные отметки без изменения файлов.'; renderDocumentEditor();
+    }).finally(function () { if (draftId === documentDraftId) $('#measurements-save').disabled = false; });
+  }
+  function pickDocument(category, replaceId) {
+    if (!documentDraft || documentBusy) return;
+    documentPicker = { category: category, replaceId: replaceId || null, draftId: documentDraftId, batchId: S.batch.id };
+    var input = $('#document-file'); input.accept = Docs.ACCEPT; input.multiple = !replaceId; input.value = ''; input.click();
+  }
+  async function receiveDocuments(input) {
+    var selected = Array.from(input.files || []), picker = documentPicker; input.value = '';
+    if (!selected.length || !picker || !documentDraft) return;
+    var active = function () { return route === 'measurements' && picker.draftId === documentDraftId && picker.batchId === S.batch.id; };
+    documentBusy = true; $('#measurements-save').disabled = true; $('#measurements-error').hidden = true; $('#documents-status').textContent = 'Проверяем выбранные файлы'; renderDocumentEditor();
+    try {
+      var remaining = documentDraft.filter(function (r) { return r.id !== picker.replaceId; });
+      if ((picker.replaceId && selected.length !== 1) || remaining.filter(function (r) { return r.category === picker.category; }).length + selected.length > Docs.MAX_FILES) throw new Error('К одному пункту можно приложить до 10 файлов. Для замены выберите один файл.');
+      var prepared = await Promise.all(selected.map(function (file) { return Docs.prepare(file, picker.batchId, picker.category); }));
+      if (!active()) return;
+      documentDraft = remaining.concat(prepared);
+      $('#documents-status').textContent = 'Файлы выбраны. Нажмите «Сохранить замеры и документы», чтобы приложить их к партии.';
+    } catch (error) {
+      if (!active()) return;
+      $('#measurements-error').hidden = false; $('#measurements-error').textContent = error.message;
+      $('#documents-status').textContent = 'Выбранные файлы не добавлены. Прежние документы сохранены.';
+    } finally {
+      if (active()) { documentBusy = false; $('#measurements-save').disabled = false; renderDocumentEditor(); $('#doc-add-' + picker.category).focus({ preventScroll: true }); }
+    }
+  }
   function support(target) {
     target.replaceChildren(); var b = S.batch;
     var groups = [
       ['Замеры поставщика', MEASUREMENTS.map(function (m) { return [m[1], b.measurements[m[0]] === null ? 'Не измеряли' : precise.format(b.measurements[m[0]]) + ' ' + m[2], b.example && b.measurementsExample !== false ? 'Пример показаний, ' + m[3] : 'Введено поставщиком, ' + m[3]]; })],
-      ['Документы', DOCUMENTS.map(function (d) { return [d[1], b.documents[d[0]] ? 'Подготовлен' : 'Не отмечен', 'Наличие отмечает поставщик']; })],
+      ['Документы', DOCUMENTS.map(function (d) { var files = filesFor(d[0]); return [d[1], files.length ? 'Файлов: ' + files.length : b.documents[d[0]] ? 'Отмечено' : documentBatch !== b.id ? documentLoadError ? 'Недоступно' : 'Читаем файлы' : 'Не приложено', files.length ? 'Файлы приложены поставщиком' : documentLoadError ? 'Файлы пока недоступны' : 'Наличие отмечает поставщик']; })],
       ['Упаковка и рейс', [['Паллеты и тара', b.packaging ? 'Проверены' : 'Не отмечено', 'Отметка поставщика'], ['Паллет в партии', String(b.pallets), 'Данные партии'], ['Выезд', b.departure || 'Не указан', 'Расписание поставщика'], ['Прибытие', b.arrival || 'Не указано', 'Расписание поставщика']]]
     ];
-    groups.forEach(function (g) { var group = element('section', 'support-group'); group.append(element('h3', '', g[0])); g[1].forEach(function (r) { var row = element('div', 'row'), left = element('span', 'row-l'); left.append(element('span', 'row-t', r[0]), element('span', 'row-s', r[2])); row.append(left, element('span', 'row-v', r[1])); group.append(row); }); target.append(group); });
+    groups.forEach(function (g) { var group = element('section', 'support-group'); group.append(element('h3', '', g[0])); g[1].forEach(function (r, i) { var row = element('div', 'row'), left = element('span', 'row-l'); left.append(element('span', 'row-t', r[0]), element('span', 'row-s', r[2])); row.append(left, element('span', 'row-v', r[1])); group.append(row); if (g[0] === 'Документы') { var files = filesFor(DOCUMENTS[i][0]); if (files.length) group.append(fileList(files, false)); } }); target.append(group); });
   }
   function method(target) {
     target.replaceChildren();
@@ -384,15 +482,15 @@
   function fillMeasurements() {
     var f = $('#measurements-form');
     MEASUREMENTS.forEach(function (m) { var v = S.batch.measurements[m[0]]; f.elements[m[0]].value = v === null ? '' : v; });
-    DOCUMENTS.forEach(function (d) { f.elements[d[0]].checked = S.batch.documents[d[0]]; });
     f.elements.packaging.checked = S.batch.packaging; $('#measurements-error').hidden = true;
+    loadDocumentDraft();
   }
   function renderLibrary() {
     var list = $('#batch-list'); list.replaceChildren(); var batches = [];
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var key = localStorage.key(i); if (!key || !key.startsWith(LIBRARY_PREFIX)) continue;
-        try { var item = Core.restore(localStorage.getItem(key)); if (!item.batch.example) batches.push(item); } catch (error) { /* Other damaged records do not block this party. */ }
+        try { var item = Core.restore(localStorage.getItem(key)); batches.push(item); } catch (error) { /* Other damaged records do not block this party. */ }
       }
     } catch (error) { list.append(element('p', 'note', 'Сохранение в браузере недоступно. Текущая партия остаётся в этой вкладке.')); }
     if (!S.batch.example && !batches.some(function (item) { return item.batch.id === S.batch.id; })) batches.push(S);
@@ -416,6 +514,7 @@
     if (r !== 'analysis') r = normalizeRoute(r);
     if (route === 'analysis' && r !== 'analysis') cancelAnalysis();
     if (r !== 'camera') stopCamera();
+    if (r !== 'measurements') { documentDraftId++; documentDraft = null; documentPicker = null; documentBusy = false; releaseDocumentURLs(documentBatch === S.batch.id ? documentFiles : []); }
     route = r;
     if (location.hash !== '#' + r) history.replaceState(null, '', location.pathname + location.search + '#' + r);
     $$('.screen').forEach(function (screen) { screen.classList.toggle('active', screen.id === 's-' + r); });
@@ -431,6 +530,8 @@
     if (r === 'passport') renderReport();
     window.scrollTo(0, 0);
     var heading = $('#s-' + r + ' h1'); if (heading) heading.focus({ preventScroll: true });
+    var batchId = S.batch.id;
+    ensureDocuments(r !== 'measurements').then(function () { if (S.batch.id === batchId) renderBatchInfo(); }).catch(function () { if (S.batch.id === batchId) renderBatchInfo(); });
   }
   function go(r) {
     var target = normalizeRoute(r);
@@ -448,6 +549,16 @@
 
   document.addEventListener('click', function (e) {
     var button = e.target.closest('button'); if (!button) return;
+    if (button.dataset.docAdd) { pickDocument(button.dataset.docAdd); return; }
+    if (button.dataset.docReplace) { pickDocument(button.dataset.docCategory, button.dataset.docReplace); return; }
+    if (button.dataset.docRemove) {
+      if (documentDraft && !documentBusy) {
+        documentDraft = documentDraft.filter(function (r) { return r.id !== button.dataset.docRemove; }); renderDocumentEditor();
+        $('#documents-status').textContent = 'Файл убран из списка. Сохраните изменения или нажмите «Отменить», чтобы вернуть его.';
+        $('#doc-add-' + button.dataset.docCategory).focus({ preventScroll: true });
+      }
+      return;
+    }
     if (button.hasAttribute('data-new')) { openBatchEditor(true); return; }
     if (button.dataset.openBatch) {
       if (button.dataset.openBatch !== S.batch.id) { try { S = Core.restore(localStorage.getItem(LIBRARY_PREFIX + button.dataset.openBatch)); } catch (error) { toast('Не удалось открыть партию'); return; } }
@@ -484,13 +595,31 @@
       draftBatch = null; lastResultId = null; save(); go('supplier'); toast(editingNew ? 'Партия создана. Можно начинать проверку.' : 'Изменения сохранены');
     } catch (error) { $('#batch-form-error').hidden = false; $('#batch-form-error').textContent = error.message; $('#batch-form-error').scrollIntoView({ block: 'center' }); }
   });
-  $('#measurements-form').addEventListener('submit', function (e) {
-    e.preventDefault(); var f = this, b = JSON.parse(JSON.stringify(S.batch));
+  $('#measurements-form').addEventListener('submit', async function (e) {
+    e.preventDefault(); if (documentBusy || measurementsSaving) return;
+    var f = this, b = JSON.parse(JSON.stringify(S.batch)), state = S, records = documentDraft && documentDraft.slice(), baseline = documentBaseline.slice();
     MEASUREMENTS.forEach(function (m) { b.measurements[m[0]] = f.elements[m[0]].value === '' ? null : Number(f.elements[m[0]].value); });
-    DOCUMENTS.forEach(function (d) { b.documents[d[0]] = f.elements[d[0]].checked; }); b.packaging = f.elements.packaging.checked; b.measurementsExample = false;
-    try { Core.validateBatch(b); S.batch = b; S.decision = null; event('Замеры и готовность документов обновлены'); save(); go('supplier'); toast('Замеры сохранены'); }
-    catch (error) { $('#measurements-error').hidden = false; $('#measurements-error').textContent = error.message; }
+    b.documents = Object.assign({}, documentManualDraft); b.packaging = f.elements.packaging.checked; b.measurementsExample = false;
+    try {
+      Core.validateBatch(b); measurementsSaving = true;
+      $$('#s-measurements button, #measurements-form input').forEach(function (n) { n.disabled = true; }); $('#measurements-save').textContent = 'Сохраняем';
+      if (records) {
+        if (!save(true)) throw new Error('Не удалось сохранить данные партии в браузере. Документы не изменены; освободите место и попробуйте ещё раз.');
+        await Docs.commit(b.id, records, baseline);
+        if (S !== state) return;
+        documentBatch = b.id; documentFiles = records; releaseDocumentURLs(records);
+      }
+      S.batch = b; S.decision = null; event('Замеры и документы обновлены'); var saved = save(); go('supplier');
+      toast(saved ? 'Замеры и документы сохранены' : 'Файлы сохранены. Не удалось сохранить часть данных партии.');
+    } catch (error) {
+      $('#measurements-error').hidden = false; $('#measurements-error').textContent = error.name === 'QuotaExceededError' ? 'Недостаточно места для документов. Уменьшите файлы или удалите ненужные. Прежние документы не изменены.' : error.message;
+      $('#measurements-error').scrollIntoView({ block: 'center' });
+    } finally {
+      measurementsSaving = false; $$('#s-measurements button, #measurements-form input').forEach(function (n) { n.disabled = false; }); $('#measurements-save').textContent = 'Сохранить замеры и документы';
+      if (route === 'measurements') renderDocumentEditor();
+    }
   });
+  $('#document-file').addEventListener('change', function () { receiveDocuments(this); });
   $('#sup-cta').addEventListener('click', function () { var st = Core.stats(S); if (st.needsReview) go('passport'); else if (st.done) review(); else if (S.pending && S.pending.photo) analyze(); else go('camera'); });
   $('#sup-review').addEventListener('click', review);
   $('#sup-extend').addEventListener('click', function () { var st = Core.stats(S), extra = Math.max(1, Core.extraNeeded(S) || 10); S.goal = Math.min(2000, st.checked + extra); S.decision = null; event('Проба расширена до ' + S.goal + ' плодов'); save(); go('camera'); });

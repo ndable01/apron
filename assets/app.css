@@ -1155,3 +1155,51 @@ details[open]>summary:after {
 .event-list li span {
   min-width: 0;
 }
+
+.document-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.document-item .check-label {
+  border-top: 0;
+  padding: 4px 0;
+}
+.document-hint {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+  margin: 3px 0 6px 32px;
+}
+.document-files {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.document-file {
+  padding: 10px 0;
+}
+.document-file + .document-file {
+  border-top: 1px solid var(--line);
+}
+.document-filename {
+  font-size: 14px;
+  line-height: 21px;
+  overflow-wrap: anywhere;
+}
+.document-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  margin-top: 2px;
+}
+.document-file-actions .text-link {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  text-align: left;
+}
+.text-link:disabled {
+  color: var(--muted);
+  opacity: .65;
+  cursor: default;
+}

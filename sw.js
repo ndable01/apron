@@ -1,7 +1,7 @@
 'use strict';
 // Relative URLs preserve the existing GitHub Pages project path and QR links.
-var CACHE = 'apron-personal-v3-editable-20261101';
-var FILES = ['./', './index.html', './assets/app.css?v=3', './assets/core.js?v=3', './assets/app.js?v=3', './assets/test-tomato.jpg', './fonts/onest-400.ttf', './fonts/onest-500.ttf', './fonts/onest-600.ttf'];
+var CACHE = 'apron-personal-v4-documents-20261101';
+var FILES = ['./', './index.html', './assets/app.css?v=4', './assets/core.js?v=4', './assets/app.js?v=4', './assets/documents.js?v=4', './assets/test-tomato.jpg', './fonts/onest-400.ttf', './fonts/onest-500.ttf', './fonts/onest-600.ttf'];
 self.addEventListener('install', function (event) {
   event.waitUntil(caches.open(CACHE).then(function (cache) { return cache.addAll(FILES.map(function (file) { return new Request(new URL(file, self.location.href).href, { cache: 'reload' }); })); }).then(function () { return self.skipWaiting(); }));
 });

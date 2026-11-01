@@ -7,9 +7,10 @@
 <meta name="description" content="Apron: проверьте пробу перед отгрузкой, сохраните замеры и подготовьте отчёт для РЦ.">
 <title>Apron</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="assets/app.css?v=3">
-<script defer src="assets/core.js?v=3"></script>
-<script defer src="assets/app.js?v=3"></script>
+<link rel="stylesheet" href="assets/app.css?v=4">
+<script defer src="assets/core.js?v=4"></script>
+<script defer src="assets/documents.js?v=4"></script>
+<script defer src="assets/app.js?v=4"></script>
 </head>
 <body>
 <noscript>Для проверки пробы нужен JavaScript. Откройте ссылку в Safari или Chrome с включённым JavaScript.</noscript>
@@ -119,15 +120,14 @@
         <fieldset><legend>Показания приборов</legend>
           <div class="form-grid"><label>Температура, °C<input name="temperature" type="number" inputmode="decimal" min="-100" max="1000000" step="any" placeholder="Не измеряли"></label><label>Калибр, мм<input name="caliber" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label><label>Масса нетто, кг<input name="mass" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label><label>Твёрдость, кг/см²<input name="firmness" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label><label>Сахаристость, °Bx<input name="brix" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label><label>Нитраты, мг/кг<input name="nitrates" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label></div>
         </fieldset>
-        <fieldset><legend>Что подготовлено к отгрузке</legend><p class="field-help">Отметьте документы, которые у вас есть. Сами файлы здесь не загружаются.</p>
-          <label class="check-label"><input name="declaration" type="checkbox">Декларация соответствия</label>
-          <label class="check-label"><input name="quality" type="checkbox">Паспорт качества</label>
-          <label class="check-label"><input name="lab" type="checkbox">Протокол испытаний</label>
-          <label class="check-label"><input name="shipment" type="checkbox">ТТН и УПД</label>
-          <label class="check-label"><input name="labels" type="checkbox">Маркировка и даты проверены</label>
+        <fieldset><legend>Документы к партии</legend>
+          <p class="field-help">Прикрепите файлы к пунктам чек-листа или отметьте наличие вручную. PDF, фото, Word, Excel, RTF и TXT, до 20 МБ на файл и до 10 файлов на пункт. Изменения сохранятся вместе с замерами.</p>
+          <p class="field-help" id="documents-status" role="status"></p>
+          <div id="document-editor"></div>
+          <input type="file" id="document-file" multiple hidden>
           <label class="check-label"><input name="packaging" type="checkbox">Паллеты и тара проверены</label>
         </fieldset>
-        <div class="form-actions"><button class="btn" type="submit">Сохранить замеры</button><button class="btn-text" type="button" data-go="supplier">Отменить</button></div>
+        <div class="form-actions"><button class="btn" type="submit" id="measurements-save">Сохранить замеры и документы</button><button class="btn-text" type="button" data-go="supplier">Отменить</button></div>
       </form>
     </section>
   </main>
