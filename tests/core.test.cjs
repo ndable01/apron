@@ -115,3 +115,68 @@ test('reset creates new arrays and keeps personal sessions independent', () => {
   assert.equal(fresh.decision, null);
   assert.equal(fresh.pending, null);
 });
+
+function ownState() {
+  const s = Core.baseState(false);
+  Object.assign(s.batch, { code: 'OWN-1', supplier: 'Ферма', chain: 'Сеть', rc: 'РЦ', weight: 4 });
+  return s;
+}
+test('own parties start empty, without an invented risk or RC decision', () => {
+  const s = ownState();
+  assert.equal(Core.stats(s).checked, 0);
+  assert.equal(Core.stats(s).risk, null);
+  assert.equal(Core.stats(s).level, 'empty');
+  assert.deepEqual(Core.allowedDecisions(s), []);
+  assert.equal(Core.restore(JSON.stringify(s)).batch.code, 'OWN-1');
+});
+test('edits recalculate per-party tolerances without losing photographs', () => {
+  const s = ownState();
+  Core.addFruit(s, fruit('a', 'defect', 1));
+  const before = Core.stats(s).risk;
+  const b = JSON.parse(JSON.stringify(s.batch));
+  b.tolerance = { defect: 80, offspec: 80 }; b.product = 'Томаты красные'; b.revenue = 640000;
+  s.decision = { kind: 'resort', ts: Date.now() };
+  Core.updateBatch(s, b);
+  assert.ok(Core.stats(s).risk < before);
+  assert.equal(s.fruits[0].photo, photo);
+  assert.equal(s.batch.product, 'Томаты красные');
+  assert.equal(s.decision, null);
+  assert.equal(Core.CONFIG.tolerance.defect, 10);
+});
+test('invalid edits are rejected before changing the party', () => {
+  const s = ownState(), original = JSON.stringify(s);
+  for (const change of [{ weight: -1 }, { sampleTotal: 0 }, { supplier: '  ' }, { pallets: 1.5 }, { revenue: Infinity }, { tolerance: { defect: 101, offspec: 10 } }]) {
+    const b = JSON.parse(JSON.stringify(s.batch)); Object.assign(b, change);
+    assert.throws(() => Core.updateBatch(s, b));
+    assert.equal(JSON.stringify(s), original);
+  }
+});
+test('goal cannot erase already counted fruit', () => {
+  const s = ownState(); Core.addFruit(s, fruit('a', 'good', 1)); Core.addFruit(s, fruit('b', 'good', 2));
+  const b = JSON.parse(JSON.stringify(s.batch)); b.sampleTotal = 1;
+  assert.throws(() => Core.updateBatch(s, b)); assert.equal(s.fruits.length, 2);
+});
+test('a new sample preserves party data and measured values, without a fake seed', () => {
+  const s = ownState(); s.batch.measurements.brix = 5.8; s.batch.documents.quality = true;
+  Core.addFruit(s, fruit('a', 'defect', 1)); s.decision = { kind: 'resort', ts: Date.now() };
+  Core.resetSample(s);
+  assert.equal(Core.stats(s).checked, 0); assert.equal(s.batch.measurements.brix, 5.8);
+  assert.equal(s.batch.documents.quality, true); assert.equal(s.decision, null);
+  assert.equal(s.batch.supplier, 'Ферма');
+});
+test('legacy saved sessions migrate while preserving sample and verdicts', () => {
+  const legacy = { version: 2, goal: 30, fruits: [fruit('legacy', 'good')], pending: null, decision: null, events: [], role: 'supplier' };
+  const s = Core.restore(JSON.stringify(legacy));
+  assert.equal(s.version, 3); assert.equal(Core.stats(s).checked, 29);
+  assert.equal(s.fruits[0].id, 'legacy'); assert.equal(s.batch.example, true);
+});
+test('a changed model specification requires explicit confirmation of old model results', () => {
+  const s = ownState();
+  Core.addFruit(s, { ...fruit('model', 'good', 1), source: 'model', result: example(), ms: 1200 });
+  const b = JSON.parse(JSON.stringify(s.batch)); b.grade = 'высший';
+  Core.updateBatch(s, b);
+  assert.equal(Core.stats(s).needsReview, true); assert.equal(Core.stats(s).risk, null);
+  assert.deepEqual(Core.allowedDecisions(s), []);
+  Core.correctFruit(s, 'model', 'good');
+  assert.equal(Core.stats(s).needsReview, false); assert.equal(s.fruits[0].source, 'manual');
+});

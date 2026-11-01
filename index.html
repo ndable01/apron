@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#FAFAF7">
-<meta name="description" content="Apron: проверка пробы томатов до отгрузки и отчёт для РЦ. Интерактивный прототип.">
+<meta name="description" content="Apron: проверьте пробу перед отгрузкой, сохраните замеры и подготовьте отчёт для РЦ.">
 <title>Apron</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="assets/app.css">
-<script defer src="assets/core.js"></script>
-<script defer src="assets/app.js"></script>
+<link rel="stylesheet" href="assets/app.css?v=3">
+<script defer src="assets/core.js?v=3"></script>
+<script defer src="assets/app.js?v=3"></script>
 </head>
 <body>
 <noscript>Для проверки пробы нужен JavaScript. Откройте ссылку в Safari или Chrome с включённым JavaScript.</noscript>
@@ -18,9 +18,9 @@
   <p class="browser-hint" id="browser-hint" hidden>Если камера не включается, откройте ссылку в Safari или Chrome.</p>
   <main>
     <section class="screen" id="s-supplier" aria-label="Поставщик">
-      <div class="topbar"><button class="wordmark" type="button" aria-label="Apron">Apron</button><span class="small muted">«Южная гряда»</span></div>
+      <div class="topbar"><button class="wordmark" type="button" aria-label="Apron">Apron</button><button class="text-link" type="button" data-go="batches">Мои партии</button></div>
       <nav class="seg" aria-label="Этапы проверки"><span aria-current="step">Поставщик</span><button type="button" data-go="rc">РЦ</button></nav>
-      <header class="head"><h1 class="title" tabindex="-1">Томаты розовые, 10 т</h1><p class="sub">Сеть «Город», РЦ Север</p><p class="small muted">Партия 0611-07. Выезд <span data-trip="departure"></span><br><span data-trip="distance"></span> км, прибытие <span data-trip="arrival"></span></p></header>
+      <header class="head"><h1 class="title" tabindex="-1" data-batch="title"></h1><p class="sub" data-batch="destination"></p><p class="small muted" data-batch="description"></p><div class="header-actions"><button class="text-link" type="button" id="edit-batch">Изменить партию</button><button class="text-link" type="button" id="new-batch">Новая партия</button></div></header>
       <section class="card" aria-labelledby="sample-title">
         <div class="card-head"><h2 class="h2" id="sample-title">Проба</h2><span class="small muted" id="sup-count"></span></div>
         <progress id="sup-progress" max="30" value="28" aria-label="Проверено плодов"></progress>
@@ -34,10 +34,10 @@
         <button class="btn-text" type="button" id="sup-review" hidden>Посмотреть со стороны РЦ</button>
       </section>
       <div class="decision-note" id="sup-decision" role="status" hidden></div>
-      <p class="sample-origin small muted">Демонстрационная партия: 28 плодов заданы заранее, среди них 1 брак. Последние плоды проверяете вы.</p>
-      <details class="support-details"><summary>Замеры 6 из 6, документы 5 из 5, упаковка проверена</summary><div id="sup-support"></div></details>
+      <p class="sample-origin small muted" id="sample-origin"></p>
+      <details class="support-details"><summary id="support-summary">Замеры и документы</summary><button class="text-link" type="button" data-go="measurements">Заполнить или изменить</button><div id="sup-support"></div></details>
       <details class="method"><summary>Что означает риск среза</summary><div class="detail-body small" id="sup-method"></div></details>
-      <button class="btn-text restart muted" type="button" data-reset>Начать заново</button>
+      <button class="btn-text restart muted" type="button" data-reset>Начать новую пробу</button>
     </section>
 
     <section class="screen cam" id="s-camera" aria-label="Камера">
@@ -61,19 +61,79 @@
     </section>
 
     <section class="screen" id="s-rc" aria-label="Распределительный центр">
-      <div class="topbar"><button class="wordmark" type="button" aria-label="Apron">Apron</button><span class="small muted">РЦ Север</span></div><nav class="seg" aria-label="Этапы проверки"><button type="button" data-go="supplier">Поставщик</button><span aria-current="step">РЦ</span></nav><header class="head"><h1 class="title" tabindex="-1">Партия глазами РЦ</h1><p class="sub">Это проба, которую вы только что проверили как поставщик.</p></header>
+      <div class="topbar"><button class="wordmark" type="button" aria-label="Apron">Apron</button><span class="small muted" data-batch="rc"></span></div><nav class="seg" aria-label="Этапы проверки"><button type="button" data-go="supplier">Поставщик</button><span aria-current="step">РЦ</span></nav><header class="head"><h1 class="title" tabindex="-1">Проверка перед приёмкой</h1><p class="sub">Фото и замеры поставщика. Решение о поставке остаётся за вами.</p></header>
       <div class="rc-waiting" id="rc-waiting" hidden><p class="note">Сначала завершите пробу со стороны поставщика. Здесь появятся ваши фото и результаты.</p><button class="btn mt18" type="button" data-go="supplier">Продолжить проверку</button></div>
-      <div id="rc-content"><section class="card"><h2 class="h2">Томаты розовые, 10 т</h2><p class="small muted">«Южная гряда». Прибытие <span data-trip="arrival"></span></p><div id="rc-latest"></div><div class="result-summary" id="rc-summary"></div><p class="money small" id="rc-money" hidden></p><p class="small muted" style="margin-top:12px">Решение до выезда. Окончательная приёмка после осмотра на РЦ.</p><div class="actions mt18" id="rc-decisions"></div><div class="decision-note" id="rc-decision" role="status" hidden></div><button class="btn-text" type="button" data-go="passport">Открыть отчёт о пробе</button></section><section class="section"><h2 class="h2">Ход проверки</h2><ol class="event-list" id="rc-events"></ol></section></div>
-      <button class="btn-text restart muted" type="button" data-reset>Пройти заново</button>
+      <div id="rc-content"><section class="card"><h2 class="h2" data-batch="title"></h2><p class="small muted" data-batch="supplierArrival"></p><div id="rc-latest"></div><div class="result-summary" id="rc-summary"></div><p class="money small" id="rc-money" hidden></p><p class="small muted" style="margin-top:12px">Решение до выезда. Окончательная приёмка после осмотра на РЦ.</p><div class="actions mt18" id="rc-decisions"></div><div class="decision-note" id="rc-decision" role="status" hidden></div><button class="btn-text" type="button" data-go="passport">Открыть отчёт о пробе</button></section><section class="section"><h2 class="h2">Ход проверки</h2><ol class="event-list" id="rc-events"></ol></section></div>
+      <button class="btn-text restart muted" type="button" data-go="supplier">К партии поставщика</button>
     </section>
 
     <section class="screen" id="s-passport" aria-label="Отчёт о пробе">
-      <div class="topbar"><button class="back" type="button" data-go="rc">К РЦ</button><span class="small muted">Партия 0611-07</span></div><header class="head"><h1 class="title" tabindex="-1">Отчёт о пробе</h1><p class="sub">Томаты розовые, 10 т<br>«Южная гряда», сеть «Город»</p></header><div class="result-summary" id="report-summary"></div><p class="small muted" id="report-interval"></p><section class="section"><h2 class="h2">Как проверить на рампе</h2><p class="note" id="report-hints"></p></section><section class="section"><h2 class="h2">Ваши снимки</h2><div id="report-photos"></div><p class="small muted sample-origin">Исходные 28 плодов: демонстрационные данные, 1 брак в паллете 7, ящике 12. Фотографии исходной пробы не предоставлены.</p></section><details class="support-details"><summary>Замеры, документы и упаковка</summary><div id="report-support"></div></details><details class="method"><summary>Как считали</summary><div class="detail-body small" id="report-method"></div></details><p class="small muted" id="model-card" hidden></p><button class="btn mt18" type="button" data-go="rc">К решению РЦ</button>
+      <div class="topbar"><button class="back" type="button" data-go="rc">К РЦ</button><span class="small muted" data-batch="code"></span></div><header class="head"><h1 class="title" tabindex="-1">Отчёт о пробе</h1><p class="sub" data-batch="reportHeading"></p></header><div class="result-summary" id="report-summary"></div><p class="small muted" id="report-interval"></p><section class="section"><h2 class="h2">Как проверить на рампе</h2><p class="note" id="report-hints"></p></section><section class="section"><h2 class="h2">Ваши снимки</h2><div id="report-photos"></div><p class="small muted sample-origin" id="report-origin"></p></section><details class="support-details"><summary>Замеры, документы и упаковка</summary><div id="report-support"></div></details><details class="method"><summary>Как считали</summary><div class="detail-body small" id="report-method"></div></details><p class="small muted" id="model-card" hidden></p><button class="btn mt18" type="button" id="report-back">К решению РЦ</button>
+    </section>
+
+    <section class="screen" id="s-batches" aria-label="Мои партии">
+      <div class="topbar"><span class="wordmark">Apron</span><button class="text-link" type="button" data-go="supplier">К текущей партии</button></div>
+      <header class="head"><h1 class="title" tabindex="-1">Мои партии</h1><p class="sub">Начните проверку или вернитесь к сохранённой партии.</p></header>
+      <button class="btn mt18" type="button" data-new>Создать партию</button>
+      <div id="batch-list" class="batch-list"></div>
+      <button class="btn-line mt18" type="button" id="open-example">Открыть пример с томатами</button>
+      <p class="small muted sample-origin">Партии и снимки сохраняются в этом браузере на вашем устройстве.</p>
+    </section>
+    <section class="screen" id="s-batch-edit" aria-label="Данные партии">
+      <div class="topbar"><button class="back" type="button" data-go="supplier">Отменить</button><span class="small muted">Данные партии</span></div>
+      <header class="head"><h1 class="title" tabindex="-1" id="batch-form-title">Изменить партию</h1><p class="sub" id="batch-form-description">Заполните данные, по которым будете проверять и отгружать товар.</p></header>
+      <form id="batch-form" class="edit-form">
+        <div class="form-error" id="batch-form-error" role="alert" hidden></div>
+        <fieldset><legend>Партия и получатель</legend>
+          <label>Номер партии<input name="code" required maxlength="100" autocomplete="off"></label>
+          <label>Продукция<input name="product" required maxlength="100" placeholder="Например, томаты розовые"></label>
+          <label>Поставщик<input name="supplier" required maxlength="100" autocomplete="organization" placeholder="Название хозяйства или компании"></label>
+          <label>Торговая сеть<input name="chain" required maxlength="100" placeholder="Кому отправляете"></label>
+          <label>Распределительный центр<input name="rc" required maxlength="100" placeholder="Название РЦ"></label>
+          <div class="form-grid"><label>Объём, т<input name="weight" type="number" inputmode="decimal" min="0.001" max="100000" step="any" required></label><label>Стоимость, ₽<input name="revenue" type="number" inputmode="decimal" min="0" max="1000000000000" step="any" placeholder="Не указана"></label></div>
+        </fieldset>
+        <fieldset><legend>Проба и допуски</legend>
+          <label>Сколько плодов проверить<input name="sampleTotal" type="number" inputmode="numeric" min="1" max="2000" step="1" required></label>
+          <p class="field-help" id="sample-size-help">Каждый снимок добавляет один плод в пробу.</p>
+          <div class="form-grid"><label>Брак, допуск %<input name="defectTolerance" type="number" inputmode="decimal" min="0" max="100" step="any" required></label><label>Не по критериям, %<input name="offspecTolerance" type="number" inputmode="decimal" min="0" max="100" step="any" required></label></div>
+          <p class="field-help">Укажите допуски из условий приёмки вашей сети. Начальные 10 % можно изменить.</p>
+          <label>Товарный сорт<select name="grade"><option>высший</option><option selected>первый</option><option>второй</option></select></label>
+          <label>Дополнительные требования сети<textarea name="rules" rows="3" maxlength="1500" placeholder="Например, требования к окраске и зрелости"></textarea></label>
+          <div class="form-grid"><label>Паллет в партии<input name="pallets" type="number" inputmode="numeric" min="1" max="1000" step="1" required></label><label>Ящиков на паллете<input name="boxesPerPallet" type="number" inputmode="numeric" min="1" max="10000" step="1" required></label></div>
+          <p class="field-help">Apron выбирает место отбора из этих паллет и ящиков.</p>
+        </fieldset>
+        <fieldset><legend>Рейс и приёмка</legend>
+          <label>Когда выезжает машина<input name="departure" maxlength="100" placeholder="Например, сегодня в 18:00"></label>
+          <label>Ожидаемое прибытие<input name="arrival" maxlength="100" placeholder="Например, завтра в 06:00"></label>
+          <label>Расстояние, км<input name="distance" type="number" inputmode="numeric" min="0" max="100000" step="1" placeholder="Не указано"></label>
+          <div class="form-grid"><label>Рампа РЦ<input name="ramp" maxlength="100" placeholder="Не назначена"></label><label>Время приёмки<input name="slotTime" maxlength="100" placeholder="Не назначено"></label></div>
+        </fieldset>
+        <div class="form-actions"><button class="btn" type="submit" id="batch-save">Сохранить изменения</button><button class="btn-text" type="button" data-go="supplier">Отменить</button></div>
+      </form>
+    </section>
+    <section class="screen" id="s-measurements" aria-label="Замеры и документы">
+      <div class="topbar"><button class="back" type="button" data-go="supplier">К партии</button><span class="small muted" data-batch="code"></span></div>
+      <header class="head"><h1 class="title" tabindex="-1">Замеры и документы</h1><p class="sub">Запишите показания приборов. То, что ещё не измеряли, оставьте пустым.</p></header>
+      <form id="measurements-form" class="edit-form">
+        <div class="form-error" id="measurements-error" role="alert" hidden></div>
+        <fieldset><legend>Показания приборов</legend>
+          <div class="form-grid"><label>Температура, °C<input name="temperature" type="number" inputmode="decimal" min="-100" max="1000000" step="any" placeholder="Не измеряли"></label><label>Калибр, мм<input name="caliber" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label><label>Масса нетто, кг<input name="mass" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label><label>Твёрдость, кг/см²<input name="firmness" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label><label>Сахаристость, °Bx<input name="brix" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label><label>Нитраты, мг/кг<input name="nitrates" type="number" inputmode="decimal" min="0" max="1000000" step="any" placeholder="Не измеряли"></label></div>
+        </fieldset>
+        <fieldset><legend>Что подготовлено к отгрузке</legend><p class="field-help">Отметьте документы, которые у вас есть. Сами файлы здесь не загружаются.</p>
+          <label class="check-label"><input name="declaration" type="checkbox">Декларация соответствия</label>
+          <label class="check-label"><input name="quality" type="checkbox">Паспорт качества</label>
+          <label class="check-label"><input name="lab" type="checkbox">Протокол испытаний</label>
+          <label class="check-label"><input name="shipment" type="checkbox">ТТН и УПД</label>
+          <label class="check-label"><input name="labels" type="checkbox">Маркировка и даты проверены</label>
+          <label class="check-label"><input name="packaging" type="checkbox">Паллеты и тара проверены</label>
+        </fieldset>
+        <div class="form-actions"><button class="btn" type="submit">Сохранить замеры</button><button class="btn-text" type="button" data-go="supplier">Отменить</button></div>
+      </form>
     </section>
   </main>
 </div>
-<dialog id="tools" class="tools" aria-labelledby="tools-title"><div class="dialog-head"><h2 class="h2" id="tools-title">Настройки показа</h2><button class="text-link" type="button" data-close="tools">Закрыть</button></div><p class="small muted">У каждого участника собственная проба в этой вкладке.</p><p class="small" id="tools-model"></p><button class="btn-line" id="test-photo" type="button">Тест без камеры</button><p class="small muted">Использует подготовленное фото. Результат отмечается вручную и помечается «тест».</p><button class="btn-line" type="button" data-reset>Сбросить пробу</button></dialog>
-<dialog id="reset-dialog" class="tools" aria-labelledby="reset-title"><h2 class="h2" id="reset-title">Начать пробу заново?</h2><p class="res-text">Ваши снимки и решение РЦ в этой вкладке будут удалены. Вернёмся к исходным 28 плодам.</p><div class="actions mt18"><button class="btn" id="reset-confirm" type="button">Начать заново</button><button class="btn-text" type="button" data-close="reset-dialog">Продолжить текущую пробу</button></div></dialog>
+<dialog id="tools" class="tools" aria-labelledby="tools-title"><div class="dialog-head"><h2 class="h2" id="tools-title">Настройки показа</h2><button class="text-link" type="button" data-close="tools">Закрыть</button></div><p class="small muted">Проверки сохраняются на этом устройстве. В «Моих партиях» можно вернуться к своей работе.</p><p class="small" id="tools-model"></p><button class="btn-line" id="test-photo" type="button">Тест без камеры</button><p class="small muted">Использует подготовленное фото. Результат отмечается вручную и помечается «тест».</p><button class="btn-line" type="button" data-reset>Сбросить пробу</button></dialog>
+<dialog id="reset-dialog" class="tools" aria-labelledby="reset-title"><h2 class="h2" id="reset-title">Начать новую пробу?</h2><p class="res-text">Снимки и решение РЦ в этой пробе будут удалены. Данные партии, замеры и допуски сохранятся. Начнём проверку с первого плода.</p><div class="actions mt18"><button class="btn" id="reset-confirm" type="button">Начать новую пробу</button><button class="btn-text" type="button" data-close="reset-dialog">Продолжить текущую пробу</button></div></dialog>
 <dialog id="correction-dialog" class="tools" aria-labelledby="correction-title"><h2 class="h2" id="correction-title">Изменить отметку</h2><p class="small muted">Исправление заменит прежний результат. В пробе останется один плод.</p><div class="mark-options"><button class="btn-line" type="button" data-correct="good">Годен</button><button class="btn-line" type="button" data-correct="offspec">Не по критериям</button><button class="btn-line" type="button" data-correct="defect">Брак</button></div><button class="btn-text" type="button" data-close="correction-dialog">Отменить</button></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </body>

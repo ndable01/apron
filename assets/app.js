@@ -4,16 +4,27 @@
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.from(document.querySelectorAll(s)); };
   var params = new URLSearchParams(location.search);
-  var STORE_KEY = 'apron-personal-sample-v2';
+  var STORE_KEY = 'apron-personal-sample-v3';
   var TITLES = { good: 'Годен', offspec: 'Не по критериям', defect: 'Брак' };
   var LEVELS = { low: 'низкий', medium: 'заметный', high: 'высокий' };
   var REASONS = { manual: 'Отмечено вручную', test: 'Тест, отмечено вручную', model: 'Модель' };
   var route = '', lastResultId = null, cameraStream = null, cameraAttempt = 0, analysisAttempt = 0, controller = null;
   var cameraMessage = '', toastTimer = null, wakeLock = null, resultBusy = false;
+  var editingNew = false, draftBatch = null;
+  var LIBRARY_PREFIX = 'apron-saved-batch-v1:';
   var number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
   var decimal = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+  var precise = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 6 });
   var S = Core.baseState();
-  try { var stored = sessionStorage.getItem(STORE_KEY); if (stored) S = Core.restore(stored); }
+  try {
+    var stored = sessionStorage.getItem(STORE_KEY) || sessionStorage.getItem('apron-personal-sample-v2');
+    if (stored) S = Core.restore(stored);
+    else {
+      var lastBatch = localStorage.getItem('apron-last-batch-v1');
+      var savedBatch = lastBatch && localStorage.getItem(LIBRARY_PREFIX + lastBatch);
+      if (savedBatch) { S = Core.restore(savedBatch); S.role = 'supplier'; }
+    }
+  }
   catch (error) { $('#storage-warning').hidden = false; $('#storage-warning').textContent = 'Сохранённая проба недоступна. Начинаем новую проверку в этой вкладке.'; }
 
   function element(tag, className, text) {
@@ -23,35 +34,65 @@
     return n;
   }
   function save() {
-    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(S)); $('#storage-warning').hidden = true; }
-    catch (error) { $('#storage-warning').hidden = false; $('#storage-warning').textContent = 'Не удалось сохранить пробу. Оставьте эту вкладку открытой.'; }
+    var saved = true;
+    S.updatedAt = Date.now();
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (error) { saved = false; }
+    if (!S.batch.example) {
+      try { localStorage.setItem(LIBRARY_PREFIX + S.batch.id, JSON.stringify(S)); localStorage.setItem('apron-last-batch-v1', S.batch.id); } catch (error) { saved = false; }
+    }
+    $('#storage-warning').hidden = saved;
+    if (!saved) $('#storage-warning').textContent = 'В браузере не хватает места для сохранения. Не закрывайте эту вкладку; снимки и изменения пока доступны здесь.';
+  }
+  function batchTitle() { return S.batch.product + ', ' + precise.format(S.batch.weight) + ' т'; }
+  function specForBatch() { return { product: S.batch.product, grade: S.batch.grade, chain: S.batch.chain, chain_rules: S.batch.rules.split('\n').map(function (x) { return x.trim(); }).filter(Boolean), reference: null }; }
+  function renderBatchInfo() {
+    var b = S.batch;
+    var description = ['Партия ' + b.code, b.supplier];
+    if (b.departure) description.push('Выезд ' + b.departure);
+    if (b.arrival) description.push('Прибытие ' + b.arrival);
+    if (b.distance !== null) description.push(number.format(b.distance) + ' км');
+    var values = { title: batchTitle(), destination: 'Сеть «' + b.chain + '», ' + b.rc, description: description.join('. '), rc: b.rc, code: 'Партия ' + b.code, supplierArrival: b.supplier + (b.arrival ? '. Прибытие ' + b.arrival : ''), reportHeading: batchTitle() + '. ' + b.supplier + ', сеть «' + b.chain + '»' };
+    $$('[data-batch]').forEach(function (n) { n.textContent = values[n.dataset.batch]; });
+    $('#sample-origin').textContent = b.example ? 'Пример партии: первые 28 плодов заданы заранее. Создайте свою партию, чтобы начать проверку с нуля.' : 'Проба вашей партии. Фото, отметки и замеры сохраняются на этом устройстве.';
+    $('#report-origin').hidden = !S.seed.checked;
+    $('#report-origin').textContent = 'Исходные ' + S.seed.checked + ' плодов заданы в примере, среди них ' + S.seed.defects + ' брак. Фото этой части пробы нет.';
+    var measured = Object.values(b.measurements).filter(function (v) { return v !== null; }).length;
+    var docs = Object.values(b.documents).filter(Boolean).length;
+    $('#support-summary').textContent = 'Замеры ' + measured + ' из 6, документы ' + docs + ' из 5' + (b.packaging ? ', упаковка отмечена' : '');
+    support($('#sup-support')); support($('#report-support')); method($('#sup-method')); method($('#report-method'));
   }
   function event(text) { S.events.push({ text: text, ts: Date.now() }); S.events = S.events.slice(-30); }
   function boxText(box) { return 'паллета ' + box.p + ', ящик ' + box.b; }
-  function time(ts) { return new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
-  function riskText(st) { return Math.round(st.risk * 100) + ' %, ' + LEVELS[st.level]; }
+  function time(ts) { var d = new Date(ts); return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  function riskText(st) { return st.level === 'empty' ? 'Пока нет данных' : st.needsReview ? 'Нужна перепроверка' : Math.round(st.risk * 100) + ' %, ' + LEVELS[st.level]; }
   function fruitCount(n) { var mod = n % 100; return n + ' ' + (mod >= 11 && mod <= 14 ? 'плодов' : n % 10 === 1 ? 'плод' : n % 10 >= 2 && n % 10 <= 4 ? 'плода' : 'плодов'); }
   function sourceText(f) {
     if (f.source !== 'model') return REASONS[f.source] + (f.corrected ? ', исправление' : '');
     return 'Модель, уверенность ' + Math.round(f.result.confidence * 100) + ' %. Ответ за ' + decimal.format(f.ms / 1000) + ' с';
   }
   function boxesWithFindings() {
-    var boxes = CONFIG.seed.defectBoxes.slice();
+    var boxes = S.seed.defectBoxes.slice();
     S.fruits.filter(function (f) { return f.verdict !== 'good'; }).forEach(function (f) { if (!boxes.some(function (b) { return b.p === f.box.p && b.b === f.box.b; })) boxes.push(f.box); });
     return boxes;
   }
   function palletTargets() { var ids = Array.from(new Set(boxesWithFindings().map(function (b) { return b.p; }))); return (ids.length === 1 ? 'паллету ' : 'паллеты ') + ids.join(', '); }
   function recommendation(st) {
+    if (!st.checked) return 'Начните с первого плода. Apron подскажет, из какого ящика его взять.';
+    if (st.needsReview) return 'Условия приёмки изменились. Проверьте и подтвердите отметки в отчёте.';
+    if (!st.defects && !st.offSpec && st.level !== 'low') {
+      var more = Core.extraNeeded(S);
+      return 'Отклонений пока нет, но данных для низкого риска мало. ' + (more === null ? 'Продолжите проверку по условиям сети.' : 'Проверьте ещё ' + fruitCount(more) + ' без отклонений.');
+    }
     if (st.level === 'low') return st.done ? 'Можно отгружать по результатам пробы. Окончательное решение после приёмки РЦ.' : 'Осталось проверить ' + fruitCount(Math.max(0, S.goal - st.checked)) + '.';
     var extra = Core.extraNeeded(S), noun = st.category === 'offspec' ? 'отклонений' : 'брака';
     var action = extra === null ? 'Расширьте пробу' : 'Проверьте ещё ' + extra + ' плодов без брака и отклонений';
-    return (st.level === 'high' ? 'Не отгружайте как есть. ' : '') + action + ' или досортируйте ' + palletTargets() + '. Риск рассчитан по доле ' + noun + '.';
+    return (st.level === 'high' ? 'Не отгружайте как есть. ' : '') + action + (boxesWithFindings().length ? ' или досортируйте ' + palletTargets() : '') + '. Риск рассчитан по доле ' + noun + '.';
   }
   function money(st, target) {
-    target.hidden = st.level === 'low';
-    var tolerance = CONFIG.tolerance.defect;
-    var cut = Math.max(0, CONFIG.money.foundPercent - tolerance) / 100 * CONFIG.money.revenue;
-    target.textContent = 'Партия ' + number.format(CONFIG.money.revenue) + ' ₽. Если на приёмке найдут ' + CONFIG.money.foundPercent + ' % брака при допуске ' + tolerance + ' %: срез около ' + number.format(cut) + ' ₽ и штраф по договору. Условный пример.';
+    target.hidden = !st.checked || !st.defects && !st.offSpec || st.level === 'low' || st.needsReview || S.batch.revenue === null;
+    var tolerance = S.batch.tolerance.defect, scenario = Math.min(100, tolerance + 5);
+    var cut = Math.max(0, scenario - tolerance) / 100 * S.batch.revenue;
+    target.textContent = 'Стоимость партии ' + number.format(S.batch.revenue) + ' ₽. Для оценки потерь: при ' + precise.format(scenario) + ' % брака и допуске ' + precise.format(tolerance) + ' % разница составит ' + number.format(cut) + ' ₽. Условия удержания зависят от договора.';
   }
   function summary(target) {
     var st = Core.stats(S), category = st.category === 'offspec';
@@ -63,9 +104,9 @@
     target.append(metric, other, line, element('p', 'recommendation', recommendation(st)));
   }
   function decisionText(kind) {
-    if (kind === 'wait') return 'РЦ сети «Город» ждёт машину: рампа ' + CONFIG.slot.ramp + ', ' + CONFIG.slot.time + '.';
-    if (kind === 'wait_strict') return 'РЦ сети «Город» ждёт машину, приёмка усиленная: сначала проверят ' + palletTargets() + '.';
-    return 'РЦ сети «Город»: досортируйте ' + palletTargets() + ' до выезда.';
+    if (kind === 'wait') return S.batch.rc + ' сети «' + S.batch.chain + '» ждёт машину' + (S.batch.ramp ? ': рампа ' + S.batch.ramp : '') + (S.batch.slotTime ? ', ' + S.batch.slotTime : '') + '.';
+    if (kind === 'wait_strict') return S.batch.rc + ' сети «' + S.batch.chain + '» ждёт машину, приёмка усиленная' + (boxesWithFindings().length ? ': сначала проверят ' + palletTargets() : '') + '.';
+    return S.batch.rc + ' сети «' + S.batch.chain + '»: досортируйте ' + (boxesWithFindings().length ? palletTargets() : 'партию') + ' до выезда.';
   }
   function finalText(kind) { return kind === 'resort' ? 'Фура ещё на складе: досортировка вместо среза.' : kind === 'wait_strict' ? 'Машина выезжает, РЦ знает, что вскрыть первым.' : 'Машина выезжает, РЦ её ждёт.'; }
   function renderDecision(target) {
@@ -78,13 +119,14 @@
     var st = Core.stats(S), pendingPhoto = S.pending && S.pending.photo;
     $('#sup-count').textContent = st.checked + ' из ' + S.goal;
     $('#sup-progress').max = S.goal; $('#sup-progress').value = st.checked;
+    $('#sup-number').parentElement.hidden = !st.checked; $('#sup-other').hidden = !st.checked;
     $('#sup-category').textContent = st.category === 'offspec' ? 'Не по критериям' : 'Брак в пробе';
     $('#sup-number').textContent = (st.category === 'offspec' ? st.offSpec : st.defects) + ' из ' + st.checked;
     $('#sup-other').textContent = st.category === 'offspec' ? 'Брак: ' + st.defects + ' из ' + st.checked : 'Не по критериям: ' + st.offSpec + ' из ' + st.checked;
     $('#sup-risk').textContent = riskText(st); $('#sup-risk').className = 's-' + st.level;
     $('#sup-note').textContent = recommendation(st); money(st, $('#sup-money'));
-    $('#sup-cta').textContent = st.done ? 'Посмотреть со стороны РЦ' : pendingPhoto ? 'Продолжить проверку снимка' : 'Проверить плод';
-    $('#sup-extend').hidden = !st.done || st.checked >= 1030;
+    $('#sup-cta').textContent = st.needsReview ? 'Проверить отметки в отчёте' : st.done ? 'Посмотреть со стороны РЦ' : pendingPhoto ? 'Продолжить проверку снимка' : 'Проверить плод';
+    $('#sup-extend').hidden = !st.done || st.needsReview || st.checked >= 2000 || S.fruits.length >= 2000;
     var extra = Core.extraNeeded(S);
     $('#sup-extend').textContent = 'Расширить пробу: ещё ' + fruitCount(Math.max(1, extra || 10));
     $('#sup-review').hidden = st.done || st.level !== 'high';
@@ -93,7 +135,7 @@
 
   function ensurePending() {
     if (S.pending) return S.pending;
-    var box = CONFIG.boxes[Math.floor(Math.random() * CONFIG.boxes.length)];
+    var box = { p: 1 + Math.floor(Math.random() * S.batch.pallets), b: 1 + Math.floor(Math.random() * S.batch.boxesPerPallet) };
     S.pending = { id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2), n: Core.stats(S).checked + 1, box: { p: box.p, b: box.b }, ts: Date.now(), photo: null, test: false, result: null, reason: null, ms: null };
     event('Apron выбрал: ' + boxText(box) + '. Плод ' + S.pending.n); save();
     return S.pending;
@@ -187,7 +229,7 @@
     try {
       var url = new URL(CONFIG.analyzeUrl, location.href);
       if (url.origin !== location.origin && url.protocol !== 'https:') throw new Error('Небезопасный адрес модели');
-      var response = await fetch(url.href, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: p.photo, spec: CONFIG.spec, context: { expected_box: boxText(p.box), fruit: p.n } }), signal: ctrl.signal });
+      var response = await fetch(url.href, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: p.photo, spec: specForBatch(), context: { expected_box: boxText(p.box), fruit: p.n } }), signal: ctrl.signal });
       if (!response.ok) throw new Error('Сервис не ответил');
       var payload = await response.json();
       if (!payload || payload.ok !== true) throw new Error('Сервис вернул ошибку');
@@ -248,6 +290,7 @@
     $('#res-title').className = 'verdict ' + (f.verdict === 'good' ? 's-low' : f.verdict === 'defect' ? 's-high' : 's-medium');
     $('#res-text').textContent = f.source === 'model' ? f.result.explanation : f.verdict === 'good' ? 'Вы отметили плод как годный. Он добавлен в пробу.' : f.verdict === 'defect' ? 'Вы отметили брак. Apron пересчитал риск по вашей пробе.' : 'Плод целый, но вы отметили несоответствие критериям. Оно учитывается отдельно от брака.';
     $('#res-source').textContent = sourceText(f) + '. ' + boxText(f.box);
+    $('#res-correct').textContent = f.source === 'model' ? 'Не согласен с результатом' : 'Изменить отметку';
     renderModel(f.result, $('#res-model'));
     if (f.result && f.source !== 'model') $('#res-model').prepend(element('p', 'model-note', 'Ниже первоначальное наблюдение модели. Итоговая отметка выбрана вручную.'));
     summary($('#res-summary')); $('#res-next').textContent = st.done ? 'Посмотреть со стороны РЦ' : 'Проверить следующий плод';
@@ -277,8 +320,9 @@
   function renderReport() {
     summary($('#report-summary'));
     var st = Core.stats(S), interval = Core.wilson(st.defects, st.checked);
+    $('#report-interval').hidden = !st.checked;
     $('#report-interval').textContent = 'Брак: ' + st.defects + ' из ' + st.checked + '. Интервал Уилсона 95 %: ' + decimal.format(interval[0] * 100) + '-' + decimal.format(interval[1] * 100) + ' % при случайном отборе плодов.';
-    var hints = ['Первыми вскройте: ' + boxesWithFindings().map(boxText).join('; ') + '. В этих местах в пробе есть брак или отклонения.'];
+    var hints = boxesWithFindings().length ? ['Первыми вскройте: ' + boxesWithFindings().map(boxText).join('; ') + '. В этих местах в пробе есть брак или отклонения.'] : ['В проверенной части пробы брак и отклонения не отмечены.'];
     var modelHints = S.fruits.filter(function (f) { return f.verdict !== 'good' && f.source === 'model' && f.result && f.result.rc_hint; }).map(function (f) { return f.result.rc_hint; });
     hints = hints.concat(Array.from(new Set(modelHints)).slice(0, 3), ['Сверьте пломбу. Вскройте 3 своих случайных места.']);
     $('#report-hints').textContent = hints.join(' ');
@@ -289,37 +333,83 @@
       if (f.photo) { var image = element('img'); image.src = f.photo; image.alt = 'Плод ' + f.n + ': ' + TITLES[f.verdict].toLowerCase(); image.loading = 'lazy'; item.append(image); }
       else item.append(element('div', 'photo-missing', 'Фото недоступно'));
       var info = element('div'); info.append(element('h3', '', 'Плод ' + f.n + ': ' + TITLES[f.verdict].toLowerCase()), element('p', '', boxText(f.box)), element('p', '', sourceText(f)), element('p', '', time(f.ts)));
-      var edit = element('button', 'text-link', 'Исправить отметку'); edit.type = 'button'; edit.dataset.edit = f.id; edit.setAttribute('aria-label', 'Исправить отметку плода ' + f.n); info.append(edit); item.append(info); photos.append(item);
+      if (f.needsReview) info.append(element('p', 's-medium', 'Условия изменились. Подтвердите результат по новым требованиям.'));
+      var edit = element('button', 'text-link', f.needsReview ? 'Подтвердить отметку' : 'Исправить отметку'); edit.type = 'button'; edit.dataset.edit = f.id; edit.setAttribute('aria-label', (f.needsReview ? 'Подтвердить' : 'Исправить') + ' отметку плода ' + f.n); info.append(edit); item.append(info); photos.append(item);
     });
+    $('#report-back').textContent = canReview() ? 'К решению РЦ' : 'Продолжить проверку партии';
     var card = CONFIG.modelCard;
     $('#model-card').hidden = !(card.model && Number.isInteger(card.checked) && card.checked > 0 && Number.isInteger(card.agreed) && Number.isFinite(card.p90));
     if (!$('#model-card').hidden) $('#model-card').textContent = 'Проверка модели ' + card.model + ': на ' + card.checked + ' наших фото совпала с нами в ' + card.agreed + '. 9 ответов из 10 быстрее ' + card.p90 + ' с.';
   }
 
+  var MEASUREMENTS = [
+    ['temperature', 'Температура', '°C', 'термощуп'], ['caliber', 'Калибр', 'мм', 'линейка'], ['mass', 'Масса нетто', 'кг', 'весы'], ['firmness', 'Твёрдость', 'кг/см²', 'пенетрометр'], ['brix', 'Сахаристость', '°Bx', 'рефрактометр'], ['nitrates', 'Нитраты', 'мг/кг', 'прибор']
+  ];
+  var DOCUMENTS = [['declaration', 'Декларация соответствия'], ['quality', 'Паспорт качества'], ['lab', 'Протокол испытаний'], ['shipment', 'ТТН и УПД'], ['labels', 'Маркировка и даты']];
   function support(target) {
+    target.replaceChildren(); var b = S.batch;
     var groups = [
-      ['Замеры поставщика', [['Температура', '12,4 °C', 'Введено вручную, термощуп'], ['Калибр', '62 мм', 'Введено вручную, линейка'], ['Масса нетто', '6,04 кг', 'Введено вручную, весы'], ['Твёрдость', '2,4 кг/см²', 'Введено вручную, пенетрометр'], ['Сахаристость', '5,4 °Bx', 'Введено вручную, рефрактометр'], ['Нитраты', '112 мг/кг', 'Введено вручную, прибор']]],
-      ['Документы', [['Декларация', 'Действует', 'Документ'], ['Паспорт качества', 'Загружен', 'Документ'], ['Протокол испытаний', 'От 28.10', 'Документ'], ['ТТН и УПД', 'Загружены', 'Документ'], ['Маркировка и даты', 'Проверены', 'Введено вручную']]],
-      ['Упаковка и рейс', [['Паллеты и тара', '20 паллет', 'Введено вручную'], ['Выезд', CONFIG.trip.departure, 'Расписание поставщика'], ['Прибытие', CONFIG.trip.arrival, 'Расписание поставщика'], ['Расстояние', CONFIG.trip.distance + ' км', 'Расписание поставщика']]]
+      ['Замеры поставщика', MEASUREMENTS.map(function (m) { return [m[1], b.measurements[m[0]] === null ? 'Не измеряли' : precise.format(b.measurements[m[0]]) + ' ' + m[2], b.example ? 'Пример показаний, ' + m[3] : 'Введено поставщиком, ' + m[3]]; })],
+      ['Документы', DOCUMENTS.map(function (d) { return [d[1], b.documents[d[0]] ? 'Подготовлен' : 'Не отмечен', 'Наличие отмечает поставщик']; })],
+      ['Упаковка и рейс', [['Паллеты и тара', b.packaging ? 'Проверены' : 'Не отмечено', 'Отметка поставщика'], ['Паллет в партии', String(b.pallets), 'Данные партии'], ['Выезд', b.departure || 'Не указан', 'Расписание поставщика'], ['Прибытие', b.arrival || 'Не указано', 'Расписание поставщика']]]
     ];
-    target.append(element('p', 'small muted detail-body', 'Демонстрационные значения. Документы и показания приборов не проверялись в этом прототипе.'));
     groups.forEach(function (g) { var group = element('section', 'support-group'); group.append(element('h3', '', g[0])); g[1].forEach(function (r) { var row = element('div', 'row'), left = element('span', 'row-l'); left.append(element('span', 'row-t', r[0]), element('span', 'row-s', r[2])); row.append(left, element('span', 'row-v', r[1])); group.append(row); }); target.append(group); });
   }
   function method(target) {
+    target.replaceChildren();
     [
-      'Это расчётная вероятность превышения заданного допуска, а не гарантия приёмки. Для брака и несоответствия критериям используются отдельные допуски по 10 %. Это условия демонстрации, спецификация сети пока не предоставлена.',
-      'Каждая категория: Beta(k + 0,5; n - k + 0,5), где k - число отклонений, n - число проверенных плодов. Общий показатель - больший из двух рисков, а не вероятность любого нарушения. Ниже 15 % - низкий, от 15 до 25 % - заметный, от 25 % - высокий. Уровень определяется до округления.',
-      'Расчёт предполагает случайный отбор и независимые наблюдения. Выбор ящика помогает распределить пробу, но не исключает смещение отбора, ошибки распознавания и ухудшение качества в дороге. Уверенность модели - её собственная оценка ответа, а не измеренная точность.',
-      'Фото показывает одну сторону одного плода. Калибр без эталона, твёрдость, сахаристость, нитраты и скрытые дефекты по нему не определяются.'
+      'Риск показывает, насколько вероятно превышение допуска по результатам пробы. Ваши допуски: брак ' + precise.format(S.batch.tolerance.defect) + ' %, несоответствие критериям ' + precise.format(S.batch.tolerance.offspec) + ' %. Их можно изменить в данных партии.',
+      'Для каждой категории считаем Beta(k + 0,5; n - k + 0,5), где k - число отклонений, n - число проверенных плодов. Общий показатель - больший из двух рисков, а не вероятность любого нарушения. Ниже 15 % - низкий, от 15 до 25 % - заметный, от 25 % - высокий.',
+      'Результат зависит от отбора пробы. Берите плоды из разных мест без предварительной сортировки. Расчёт предполагает независимые наблюдения, не учитывает скрытые дефекты и изменения в дороге. Окончательная приёмка остаётся за РЦ.',
+      'Фото показывает одну сторону плода. Твёрдость, сахаристость и нитраты вносятся по приборам; калибр без эталона по фото не определяем.'
     ].forEach(function (p) { target.append(element('p', '', p)); });
+  }
+  function openBatchEditor(create) {
+    editingNew = !!create; draftBatch = create ? Core.defaultBatch(false) : JSON.parse(JSON.stringify(S.batch));
+    if (!create) draftBatch.sampleTotal = S.goal;
+    if (create) draftBatch.code = 'П-' + new Date().toLocaleDateString('ru-RU').replace(/\./g, '') + '-' + Math.random().toString(36).slice(2, 5).toUpperCase();
+    go('batch-edit');
+  }
+  function fillBatchForm() {
+    if (!draftBatch) { editingNew = false; draftBatch = JSON.parse(JSON.stringify(S.batch)); }
+    var f = $('#batch-form');
+    ['code', 'product', 'supplier', 'chain', 'rc', 'weight', 'revenue', 'sampleTotal', 'grade', 'rules', 'pallets', 'boxesPerPallet', 'departure', 'arrival', 'distance', 'ramp', 'slotTime'].forEach(function (k) { f.elements[k].value = draftBatch[k] === null ? '' : draftBatch[k]; });
+    f.elements.defectTolerance.value = draftBatch.tolerance.defect; f.elements.offspecTolerance.value = draftBatch.tolerance.offspec;
+    f.elements.sampleTotal.min = editingNew ? 1 : Math.max(1, Core.stats(S).checked);
+    $('#batch-form-title').textContent = editingNew ? 'Новая партия' : 'Изменить партию';
+    $('#batch-save').textContent = editingNew ? 'Создать и начать проверку' : 'Сохранить изменения';
+    $('#sample-size-help').textContent = editingNew ? 'Проверка начнётся с первого плода.' : 'Проверено ' + Core.stats(S).checked + '. Снимки сохранятся, риск пересчитается по новым допускам.';
+    $('#batch-form-error').hidden = true;
+  }
+  function fillMeasurements() {
+    var f = $('#measurements-form');
+    MEASUREMENTS.forEach(function (m) { var v = S.batch.measurements[m[0]]; f.elements[m[0]].value = v === null ? '' : v; });
+    DOCUMENTS.forEach(function (d) { f.elements[d[0]].checked = S.batch.documents[d[0]]; });
+    f.elements.packaging.checked = S.batch.packaging; $('#measurements-error').hidden = true;
+  }
+  function renderLibrary() {
+    var list = $('#batch-list'); list.replaceChildren(); var batches = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i); if (!key || !key.startsWith(LIBRARY_PREFIX)) continue;
+        try { var item = Core.restore(localStorage.getItem(key)); if (!item.batch.example) batches.push(item); } catch (error) { /* Other damaged records do not block this party. */ }
+      }
+    } catch (error) { list.append(element('p', 'note', 'Сохранение в браузере недоступно. Текущая партия остаётся в этой вкладке.')); }
+    if (!S.batch.example && !batches.some(function (item) { return item.batch.id === S.batch.id; })) batches.push(S);
+    batches.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    if (!batches.length) list.append(element('p', 'empty-state', 'Здесь будут ваши партии. Создайте первую или посмотрите, как устроена проверка, на примере.'));
+    batches.forEach(function (item) {
+      var b = element('button', 'batch-item'); b.type = 'button'; b.dataset.openBatch = item.batch.id;
+      b.append(element('strong', '', item.batch.product + ', ' + precise.format(item.batch.weight) + ' т'), element('span', 'small muted', item.batch.code + '. ' + item.batch.supplier), element('span', 'small', 'Проверено ' + Core.stats(item).checked + ' из ' + item.goal + (item.decision ? '. Решение РЦ сохранено' : ''))); list.append(b);
+    });
   }
   function toast(text) { var t = $('#toast'); t.textContent = text; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 4000); }
   function normalizeRoute(r) {
-    if (['supplier', 'camera', 'analysis', 'nolink', 'result', 'rc', 'passport'].indexOf(r) < 0) return 'supplier';
+    if (['supplier', 'camera', 'analysis', 'nolink', 'result', 'rc', 'passport', 'batch-edit', 'measurements', 'batches'].indexOf(r) < 0) return 'supplier';
     if (r === 'analysis') return S.pending && S.pending.photo ? 'nolink' : 'supplier';
     if (r === 'nolink' && !(S.pending && S.pending.photo)) return 'supplier';
     if (r === 'result' && !S.fruits.length) return 'supplier';
-    if ((r === 'rc' || r === 'passport') && !canReview()) return 'supplier';
+    if (r === 'rc' && !canReview()) return 'supplier';
     return r;
   }
   function show(r) {
@@ -329,6 +419,10 @@
     route = r;
     if (location.hash !== '#' + r) history.replaceState(null, '', location.pathname + location.search + '#' + r);
     $$('.screen').forEach(function (screen) { screen.classList.toggle('active', screen.id === 's-' + r); });
+    renderBatchInfo();
+    if (r === 'batch-edit') fillBatchForm();
+    if (r === 'measurements') fillMeasurements();
+    if (r === 'batches') renderLibrary();
     if (r === 'supplier') renderSupplier();
     if (r === 'camera') enterCamera();
     if (r === 'nolink') renderManual();
@@ -354,6 +448,11 @@
 
   document.addEventListener('click', function (e) {
     var button = e.target.closest('button'); if (!button) return;
+    if (button.hasAttribute('data-new')) { openBatchEditor(true); return; }
+    if (button.dataset.openBatch) {
+      if (button.dataset.openBatch !== S.batch.id) { try { S = Core.restore(localStorage.getItem(LIBRARY_PREFIX + button.dataset.openBatch)); } catch (error) { toast('Не удалось открыть партию'); return; } }
+      lastResultId = null; draftBatch = null; save(); go('supplier'); return;
+    }
     if (button.dataset.go) { go(button.dataset.go); return; }
     if (button.dataset.close) { $('#' + button.dataset.close).close(); return; }
     if (button.hasAttribute('data-reset')) { if ($('#tools').open) $('#tools').close(); $('#reset-dialog').showModal(); return; }
@@ -369,9 +468,32 @@
       S.decision = { kind: kind, ts: Date.now() }; event(decisionText(kind)); save(); renderRC(); $('#rc-decision').setAttribute('tabindex', '-1'); $('#rc-decision').focus({ preventScroll: true }); toast('Решение сохранено. Поставщик видит ваш ответ.');
     }
   });
-  $('#sup-cta').addEventListener('click', function () { var st = Core.stats(S); if (st.done) review(); else if (S.pending && S.pending.photo) analyze(); else go('camera'); });
+  $('#edit-batch').addEventListener('click', function () { openBatchEditor(false); });
+  $('#new-batch').addEventListener('click', function () { openBatchEditor(true); });
+  $('#report-back').addEventListener('click', function () { go(canReview() ? 'rc' : 'supplier'); });
+  $('#open-example').addEventListener('click', function () { cancelAnalysis(); stopCamera(); S = Core.baseState(); draftBatch = null; lastResultId = null; save(); go('supplier'); });
+  $('#batch-form').addEventListener('submit', function (e) {
+    e.preventDefault(); var form = this, b = JSON.parse(JSON.stringify(draftBatch));
+    ['code', 'product', 'supplier', 'chain', 'rc', 'grade', 'rules', 'departure', 'arrival', 'ramp', 'slotTime'].forEach(function (k) { b[k] = form.elements[k].value.trim(); });
+    ['weight', 'sampleTotal', 'pallets', 'boxesPerPallet', 'revenue', 'distance'].forEach(function (k) { b[k] = form.elements[k].value === '' ? null : Number(form.elements[k].value); });
+    b.tolerance = { defect: Number(form.elements.defectTolerance.value), offspec: Number(form.elements.offspecTolerance.value) };
+    try {
+      Core.validateBatch(b);
+      if (editingNew) { cancelAnalysis(); stopCamera(); S = Core.baseState(false); S.batch = b; S.goal = b.sampleTotal; event('Создана партия ' + b.code); }
+      else { Core.updateBatch(S, b); event('Данные партии обновлены. Риск пересчитан по текущим допускам.'); }
+      draftBatch = null; lastResultId = null; save(); go('supplier'); toast(editingNew ? 'Партия создана. Можно начинать проверку.' : 'Изменения сохранены');
+    } catch (error) { $('#batch-form-error').hidden = false; $('#batch-form-error').textContent = error.message; $('#batch-form-error').scrollIntoView({ block: 'center' }); }
+  });
+  $('#measurements-form').addEventListener('submit', function (e) {
+    e.preventDefault(); var f = this, b = JSON.parse(JSON.stringify(S.batch));
+    MEASUREMENTS.forEach(function (m) { b.measurements[m[0]] = f.elements[m[0]].value === '' ? null : Number(f.elements[m[0]].value); });
+    DOCUMENTS.forEach(function (d) { b.documents[d[0]] = f.elements[d[0]].checked; }); b.packaging = f.elements.packaging.checked;
+    try { Core.validateBatch(b); S.batch = b; S.decision = null; event('Замеры и готовность документов обновлены'); save(); go('supplier'); toast('Замеры сохранены'); }
+    catch (error) { $('#measurements-error').hidden = false; $('#measurements-error').textContent = error.message; }
+  });
+  $('#sup-cta').addEventListener('click', function () { var st = Core.stats(S); if (st.needsReview) go('passport'); else if (st.done) review(); else if (S.pending && S.pending.photo) analyze(); else go('camera'); });
   $('#sup-review').addEventListener('click', review);
-  $('#sup-extend').addEventListener('click', function () { var st = Core.stats(S), extra = Math.max(1, Core.extraNeeded(S) || 10); S.goal = Math.min(1030, st.checked + extra); S.decision = null; event('Проба расширена до ' + S.goal + ' плодов'); save(); go('camera'); });
+  $('#sup-extend').addEventListener('click', function () { var st = Core.stats(S), extra = Math.max(1, Core.extraNeeded(S) || 10); S.goal = Math.min(2000, st.checked + extra); S.decision = null; event('Проба расширена до ' + S.goal + ' плодов'); save(); go('camera'); });
   $('#cam-shot').addEventListener('click', capture);
   $('#cam-file').addEventListener('change', function () { readFile(this); });
   $('#cam-resume').addEventListener('click', analyze);
@@ -379,7 +501,7 @@
   $('#an-cancel').addEventListener('click', function () { cancelAnalysis(); go('supplier'); });
   $('#res-next').addEventListener('click', function () { if (Core.stats(S).done) review(); else go('camera'); });
   $('#res-correct').addEventListener('click', function () { openCorrection(resultFruit().id); });
-  $('#reset-confirm').addEventListener('click', function () { cancelAnalysis(); stopCamera(); S = Core.baseState(); lastResultId = null; cameraMessage = ''; $('#reset-dialog').close(); save(); go('supplier'); toast('Новая проба: проверено 28 из 30 плодов'); });
+  $('#reset-confirm').addEventListener('click', function () { cancelAnalysis(); stopCamera(); Core.resetSample(S); lastResultId = null; cameraMessage = ''; $('#reset-dialog').close(); save(); go('supplier'); toast('Новая проба готова. Начните с первого плода.'); });
   $('#test-photo').addEventListener('click', async function () {
     if (Core.stats(S).done) { toast('Сначала расширьте или сбросьте пробу'); return; }
     $('#tools').close();
@@ -400,8 +522,7 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden) stopCamera(); else { requestWakeLock(); if (route === 'camera') startCamera(); } });
   document.addEventListener('pointerdown', requestWakeLock, { once: true });
   $$('.tools').forEach(function (dialog) { dialog.addEventListener('click', function (e) { if (e.target === dialog) { var r = dialog.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialog.close(); } }); });
-  $$('[data-trip]').forEach(function (n) { n.textContent = CONFIG.trip[n.dataset.trip]; });
-  support($('#sup-support')); support($('#report-support')); method($('#sup-method')); method($('#report-method'));
+
   $('#browser-hint').hidden = !/Telegram|VKClient|VKAndroidApp|VKCOM/i.test(navigator.userAgent);
   if (params.has('selftest')) {
     var test = element('pre', 'selftest');
