@@ -1203,3 +1203,83 @@ details[open]>summary:after {
   opacity: .65;
   cursor: default;
 }
+
+.print-sheet {
+  max-width:560px;
+  margin:0 auto;
+  padding:24px 16px 48px
+}
+
+.print-note {
+  margin:0 0 16px;
+  color:var(--soft)
+}
+
+.print-action {
+  margin:0 0 24px
+}
+
+.print-card {
+  display:flex;
+  flex-direction:column;
+  gap:6mm;
+  width:100%;
+  aspect-ratio:148/210;
+  margin:0 0 24px;
+  padding:10mm;
+  background:var(--surface);
+  border:1px solid var(--line)
+}
+
+.print-label {
+  margin:0;
+  font-size:30px;
+  line-height:1.15;
+  font-weight:600;
+  letter-spacing:-.02em;
+  color:var(--text)
+}
+
+.print-label-small {
+  font-size:18px
+}
+
+.print-field {
+  flex:1;
+  border:1px solid var(--line);
+  background:var(--surface)
+}
+
+.print-foot {
+  margin:0;
+  font-size:13px;
+  color:var(--muted)
+}
+
+@media print {
+  @page {
+    size:A5 portrait;
+    margin:0
+  }
+  .print-sheet {
+    max-width:none;
+    padding:0
+  }
+  .print-note {
+    display:none!important
+  }
+  .print-card {
+    width:148mm;
+    height:210mm;
+    aspect-ratio:auto;
+    margin:0;
+    border:0;
+    break-after:page
+  }
+  .print-label {
+    font-size:34pt
+  }
+  .print-label-small {
+    font-size:20pt
+  }
+}

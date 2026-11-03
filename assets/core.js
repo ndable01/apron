@@ -156,6 +156,21 @@
     return st.level === 'low' ? ['wait'] : ['resort', 'wait_strict'];
   }
   function isBox(x) { return !!x && Number.isInteger(x.p) && x.p > 0 && x.p <= 1000 && Number.isInteger(x.b) && x.b > 0 && x.b <= 10000; }
+  // Stage cards from CONFIG.boxes for the example; own parties draw from their own pallets and boxes.
+  function pickBox(batch, random) {
+    random = random || Math.random;
+    var stage = batch.example ? CONFIG.boxes.filter(function (x) { return isBox(x) && x.p <= batch.pallets && x.b <= batch.boxesPerPallet; }) : [];
+    if (stage.length) { var x = stage[Math.floor(random() * stage.length)]; return { p: x.p, b: x.b }; }
+    return { p: 1 + Math.floor(random() * batch.pallets), b: 1 + Math.floor(random() * batch.boxesPerPallet) };
+  }
+  // Compares the label text the model read with the box Apron chose. Only explicit numbers count.
+  function labelCheck(text, box) {
+    if (typeof text !== 'string' || !text.trim()) return { status: 'unconfirmed' };
+    var b = /ящик\D{0,4}?(\d{1,5})/i.exec(text), p = /паллет\S*\D{0,4}?(\d{1,4})/i.exec(text);
+    var seenBox = b ? Number(b[1]) : null, seenPallet = p ? Number(p[1]) : null;
+    if ((seenBox !== null && seenBox !== box.b) || (seenPallet !== null && seenPallet !== box.p)) return { status: 'mismatch', box: seenBox, pallet: seenPallet };
+    return { status: seenBox !== null ? 'confirmed' : 'unconfirmed' };
+  }
   function isPhoto(x) { return typeof x === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(x) && x.length < 1600000; }
   function validateResult(r) {
     var fail = function () { throw new Error('Некорректный ответ модели'); };
@@ -187,6 +202,7 @@
     s.fruits.forEach(function (f, i) {
       if (!f || typeof f.id !== 'string' || seen.has(f.id) || f.n !== s.seed.checked + i + 1 || VERDICTS.indexOf(f.verdict) < 0 || ['model', 'manual', 'test'].indexOf(f.source) < 0 || !isBox(f.box) || !Number.isFinite(f.ts) || (f.photo !== null && !isPhoto(f.photo))) throw new Error('Неверный плод');
       if (f.source === 'model' && (!f.result || !Number.isFinite(f.ms) || f.ms < 0)) throw new Error('Неверный источник результата');
+      if ((f.boxCheck !== undefined && ['confirmed', 'unconfirmed'].indexOf(f.boxCheck) < 0) || (f.shotDelay !== undefined && (!Number.isInteger(f.shotDelay) || f.shotDelay < 0))) throw new Error('Неверный плод');
       if (f.result !== null) validateResult(f.result);
       seen.add(f.id);
     });
@@ -207,5 +223,5 @@
     if (Math.abs(interval[0] * 100 - 1.8477) > 0.001 || Math.abs(interval[1] * 100 - 21.3235) > 0.001) throw new Error('Интервал Уилсона');
     return lines.concat(['После 2 из 30: ещё 10 годных плодов', 'Интервал Уилсона: 1,8-21,3 %']);
   }
-  return { CONFIG: CONFIG, VERDICTS: VERDICTS, risk: risk, wilson: wilson, defaultBatch: defaultBatch, validateBatch: validateBatch, updateBatch: updateBatch, resetSample: resetSample, baseState: baseState, stats: stats, extraNeeded: extraNeeded, addFruit: addFruit, correctFruit: correctFruit, allowedDecisions: allowedDecisions, validateResult: validateResult, restore: restore, selftest: selftest };
+  return { CONFIG: CONFIG, VERDICTS: VERDICTS, risk: risk, wilson: wilson, defaultBatch: defaultBatch, validateBatch: validateBatch, updateBatch: updateBatch, resetSample: resetSample, baseState: baseState, stats: stats, extraNeeded: extraNeeded, addFruit: addFruit, correctFruit: correctFruit, allowedDecisions: allowedDecisions, pickBox: pickBox, labelCheck: labelCheck, validateResult: validateResult, restore: restore, selftest: selftest };
 });

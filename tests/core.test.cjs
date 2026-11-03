@@ -180,3 +180,32 @@ test('a changed model specification requires explicit confirmation of old model 
   Core.correctFruit(s, 'model', 'good');
   assert.equal(Core.stats(s).needsReview, false); assert.equal(s.fruits[0].source, 'manual');
 });
+test('the example draws stage boxes, own parties draw from their own range', () => {
+  const ex = Core.baseState().batch;
+  for (let i = 0; i < 50; i++) { const x = Core.pickBox(ex); assert.ok(Core.CONFIG.boxes.some(b => b.p === x.p && b.b === x.b)); }
+  const own = Core.defaultBatch(false); own.pallets = 2; own.boxesPerPallet = 3;
+  for (let i = 0; i < 50; i++) { const x = Core.pickBox(own); assert.ok(x.p >= 1 && x.p <= 2 && x.b >= 1 && x.b <= 3); }
+  assert.deepEqual(Core.pickBox(own, () => 0.999), { p: 2, b: 3 });
+});
+test('box labels confirm, contradict or stay unconfirmed', () => {
+  const box = { p: 7, b: 23 };
+  assert.equal(Core.labelCheck('Паллета 7, ящик 23', box).status, 'confirmed');
+  assert.equal(Core.labelCheck('ЯЩИК №23', box).status, 'confirmed');
+  assert.deepEqual(Core.labelCheck('Паллета 3, ящик 11', box), { status: 'mismatch', box: 11, pallet: 3 });
+  assert.equal(Core.labelCheck('Паллета 3, ящик 23', box).status, 'mismatch');
+  assert.equal(Core.labelCheck('Томаты розовые, 6 кг', box).status, 'unconfirmed');
+  assert.equal(Core.labelCheck('Паллета 7', box).status, 'unconfirmed');
+  assert.equal(Core.labelCheck(null, box).status, 'unconfirmed');
+  assert.equal(Core.labelCheck('', box).status, 'unconfirmed');
+});
+test('label and timing marks survive a reload and are validated', () => {
+  const s = Core.baseState();
+  Core.addFruit(s, { ...fruit('a', 'good'), boxCheck: 'confirmed', shotDelay: 40 });
+  const back = Core.restore(JSON.stringify(s));
+  assert.equal(back.fruits[0].boxCheck, 'confirmed');
+  assert.equal(back.fruits[0].shotDelay, 40);
+  s.fruits[0].boxCheck = 'mismatch';
+  assert.throws(() => Core.restore(JSON.stringify(s)));
+  s.fruits[0].boxCheck = 'confirmed'; s.fruits[0].shotDelay = -1;
+  assert.throws(() => Core.restore(JSON.stringify(s)));
+});

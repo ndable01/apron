@@ -4,6 +4,27 @@
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.from(document.querySelectorAll(s)); };
   var params = new URLSearchParams(location.search);
+  if (params.get('print') === '1') { printCards(); return; }
+  // Printable A5 box cards for the stage: the card is the background of the photo, so the model can read the label.
+  function printCards() {
+    document.title = 'Apron: карточки ящиков';
+    var sheet = document.createElement('div'); sheet.className = 'print-sheet';
+    var note = document.createElement('p'); note.className = 'print-note';
+    note.textContent = 'Карточки для сцены. Печать на A5, без полей и масштабирования. Плод кладут в светлое поле, надпись ящика должна попасть в кадр.';
+    var button = document.createElement('button'); button.type = 'button'; button.className = 'btn print-action'; button.textContent = 'Распечатать';
+    button.addEventListener('click', function () { window.print(); });
+    sheet.append(note, button);
+    Core.CONFIG.boxes.forEach(function (box) {
+      var card = document.createElement('section'); card.className = 'print-card';
+      var head = document.createElement('p'); head.className = 'print-label'; head.textContent = 'Паллета ' + box.p + ', ящик ' + box.b;
+      var field = document.createElement('div'); field.className = 'print-field'; field.setAttribute('aria-label', 'Поле для плода');
+      var foot = document.createElement('p'); foot.className = 'print-foot'; foot.textContent = 'Apron. Положите плод в поле, плодоножкой вверх';
+      var tail = document.createElement('p'); tail.className = 'print-label print-label-small'; tail.textContent = 'Паллета ' + box.p + ', ящик ' + box.b;
+      card.append(head, field, tail, foot); sheet.append(card);
+    });
+    document.getElementById('app').replaceWith(sheet);
+    document.querySelectorAll('dialog, .toast').forEach(function (n) { n.remove(); });
+  }
   var STORE_KEY = 'apron-personal-sample-v3';
   var TITLES = { good: 'Годен', offspec: 'Не по критериям', defect: 'Брак' };
   var LEVELS = { low: 'низкий', medium: 'заметный', high: 'высокий' };
@@ -70,6 +91,11 @@
   }
   function event(text) { S.events.push({ text: text, ts: Date.now() }); S.events = S.events.slice(-30); }
   function boxText(box) { return 'паллета ' + box.p + ', ящик ' + box.b; }
+  function placeText(f) {
+    var text = 'П' + boxText(f.box).slice(1) + (f.boxCheck === 'confirmed' ? ', ящик подтверждён по этикетке' : f.boxCheck === 'unconfirmed' ? ', ящик не подтверждён' : '');
+    if (Number.isInteger(f.shotDelay)) text += '. Снято через ' + (f.shotDelay < 120 ? f.shotDelay + ' с' : Math.round(f.shotDelay / 60) + ' мин') + ' после выбора ящика';
+    return text;
+  }
   function time(ts) { var d = new Date(ts); return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
   function riskText(st) { return st.level === 'empty' ? 'Пока нет данных' : st.needsReview ? 'Нужна перепроверка' : Math.round(st.risk * 100) + ' %, ' + LEVELS[st.level]; }
   function fruitCount(n) { var mod = n % 100; return n + ' ' + (mod >= 11 && mod <= 14 ? 'плодов' : n % 10 === 1 ? 'плод' : n % 10 >= 2 && n % 10 <= 4 ? 'плода' : 'плодов'); }
@@ -142,7 +168,7 @@
 
   function ensurePending() {
     if (S.pending) return S.pending;
-    var box = { p: 1 + Math.floor(Math.random() * S.batch.pallets), b: 1 + Math.floor(Math.random() * S.batch.boxesPerPallet) };
+    var box = Core.pickBox(S.batch);
     S.pending = { id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2), n: Core.stats(S).checked + 1, box: { p: box.p, b: box.b }, ts: Date.now(), photo: null, test: false, result: null, reason: null, ms: null };
     event('Apron выбрал: ' + boxText(box) + '. Плод ' + S.pending.n); save();
     return S.pending;
@@ -186,7 +212,7 @@
     var p = ensurePending();
     $('#cam-count').textContent = 'Плод ' + p.n + ' из ' + S.goal;
     $('#cam-box').textContent = 'Apron выбрал: ' + boxText(p.box);
-    $('#cam-hint').textContent = cameraMessage || 'Возьмите любой плод из этого ящика. Снимите плод целиком, на светлом фоне, с видимой плодоножкой.';
+    $('#cam-hint').textContent = cameraMessage || 'Возьмите любой плод из этого ящика. ' + (S.batch.example ? 'Положите его на карточку ящика так, чтобы надпись попала в кадр, и снимите с видимой плодоножкой.' : 'Снимите плод целиком, на светлом фоне, с видимой плодоножкой.');
     $('#cam-hint').classList.toggle('s-high', !!cameraMessage); cameraMessage = '';
     $('#cam-resume').hidden = !p.photo;
     startCamera();
@@ -208,7 +234,7 @@
     await acceptPhoto(canvas.toDataURL('image/jpeg', 0.85), false);
   }
   async function acceptPhoto(photo, test) {
-    var p = ensurePending(); p.photo = photo; p.test = !!test; p.result = null; p.reason = null;
+    var p = ensurePending(); p.photo = photo; p.test = !!test; p.result = null; p.reason = null; p.shotAt = Date.now();
     stopCamera(); save(); await analyze();
   }
   async function readFile(input) {
@@ -226,20 +252,38 @@
     finally { URL.revokeObjectURL(url); $('#cam-system').classList.remove('muted'); }
   }
   function cancelAnalysis() { analysisAttempt++; if (controller) controller.abort(); controller = null; }
+  function relayURL(path) {
+    var url = new URL(path ? new URL(path, new URL(CONFIG.analyzeUrl, location.href)).href : CONFIG.analyzeUrl, location.href);
+    if (url.origin !== location.origin && url.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(url.hostname)) throw new Error('Небезопасный адрес модели');
+    return url.href;
+  }
+  // XHR instead of fetch: the upload event tells when the photo has really left the phone.
+  function postInspect(url, body, ctrl, onUploaded) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', url); xhr.setRequestHeader('Content-Type', 'application/json'); xhr.responseType = 'text';
+      xhr.upload.onload = onUploaded;
+      xhr.onload = function () { var payload = null; try { payload = JSON.parse(xhr.responseText); } catch (error) { /* Not JSON: handled below. */ } resolve({ status: xhr.status, payload: payload }); };
+      xhr.onerror = function () { reject(new Error('Нет связи с сервисом')); };
+      xhr.onabort = function () { reject(Object.assign(new Error('Отменено'), { name: 'AbortError' })); };
+      ctrl.signal.addEventListener('abort', function () { xhr.abort(); });
+      xhr.send(body);
+    });
+  }
   async function analyze() {
     var p = S.pending; if (!p || !p.photo) { go('camera'); return; }
     if (!CONFIG.analyzeUrl || p.test) { p.reason = p.test ? 'test' : 'unconnected'; save(); go('nolink'); return; }
     cancelAnalysis(); var attempt = analysisAttempt, started = performance.now();
     var ctrl = new AbortController(); controller = ctrl;
     var timer = setTimeout(function () { ctrl.abort(); }, CONFIG.analyzeTimeoutMs);
-    show('analysis'); $('#an-photo').src = p.photo; $('#an-status').textContent = 'Отправляем фото и ждём ответ модели';
+    show('analysis'); $('#an-photo').src = p.photo; $('#an-status').textContent = 'Отправляем фото';
     try {
-      var url = new URL(CONFIG.analyzeUrl, location.href);
-      if (url.origin !== location.origin && url.protocol !== 'https:') throw new Error('Небезопасный адрес модели');
-      var response = await fetch(url.href, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: p.photo, spec: specForBatch(), context: { expected_box: boxText(p.box), fruit: p.n } }), signal: ctrl.signal });
-      if (!response.ok) throw new Error('Сервис не ответил');
-      var payload = await response.json();
-      if (!payload || payload.ok !== true) throw new Error('Сервис вернул ошибку');
+      var answer = await postInspect(relayURL(), JSON.stringify({ image: p.photo, spec: specForBatch(), context: { expected_box: boxText(p.box), fruit: p.n } }), ctrl, function () {
+        if (attempt === analysisAttempt && route === 'analysis') $('#an-status').textContent = 'Модель смотрит на плод';
+      });
+      var payload = answer.payload;
+      if (payload && payload.error === 'not_configured') throw Object.assign(new Error('Модель не настроена'), { unconnected: true });
+      if (answer.status < 200 || answer.status >= 300 || !payload || payload.ok !== true) throw new Error('Сервис вернул ошибку');
       var result = Core.validateResult(payload.result);
       if (attempt !== analysisAttempt || S.pending !== p) return;
       p.result = result; p.ms = Math.round(performance.now() - started); p.model = typeof payload.model === 'string' ? payload.model.slice(0, 120) : null;
@@ -248,11 +292,17 @@
         cameraMessage = result.verdict === 'not_tomato' ? 'Это не похоже на томат. Снимите плод из ящика ' + p.box.b + '.' : result.retake_hint || result.explanation;
         event('Плод ' + p.n + ': ' + result.title + '. Снимок не засчитан.'); save(); go('camera'); return;
       }
+      var label = Core.labelCheck(result.label_text, p.box);
+      if (label.status === 'mismatch') {
+        p.photo = null; p.result = null;
+        cameraMessage = (label.box !== null && label.box !== p.box.b ? 'Это ящик ' + label.box + ', а Apron выбрал ящик ' + p.box.b : 'Это паллета ' + label.pallet + ', а Apron выбрал паллету ' + p.box.p) + ': снимок не засчитан.';
+        event('Плод ' + p.n + ': попытка снять не тот ящик. На этикетке «' + result.label_text + '», а Apron выбрал: ' + boxText(p.box) + '.'); save(); go('camera'); return;
+      }
       if (result.confidence < CONFIG.minConfidence) { p.reason = 'uncertain'; save(); go('nolink'); return; }
       await commitVerdict(result.verdict, 'model');
     } catch (error) {
       if (attempt !== analysisAttempt || S.pending !== p) return;
-      p.reason = error.name === 'AbortError' ? 'timeout' : 'unavailable'; save(); go('nolink');
+      p.reason = error.unconnected ? 'unconnected' : error.name === 'AbortError' ? 'timeout' : 'unavailable'; save(); go('nolink');
     } finally { clearTimeout(timer); if (controller === ctrl) controller = null; }
   }
   async function commitVerdict(verdict, source) {
@@ -263,6 +313,8 @@
       var photo = await resizePhoto(p.photo, 480, 0.8);
       if (S.pending !== p) return;
       var fruit = { id: p.id, n: p.n, box: p.box, ts: Date.now(), photo: photo, verdict: verdict, source: p.test ? 'test' : source, result: p.result || null, ms: p.ms, model: p.model || null, corrected: false };
+      if (p.result) fruit.boxCheck = Core.labelCheck(p.result.label_text, p.box).status === 'confirmed' ? 'confirmed' : 'unconfirmed';
+      if (Number.isFinite(p.shotAt) && p.shotAt >= p.ts) fruit.shotDelay = Math.round((p.shotAt - p.ts) / 1000);
       if (!Core.addFruit(S, fruit)) return;
       event('Плод ' + fruit.n + ': ' + TITLES[verdict].toLowerCase() + '. ' + sourceText(fruit));
       lastResultId = fruit.id; save(); go('result');
@@ -296,7 +348,7 @@
     $('#res-title').textContent = f.source === 'model' ? f.result.title : TITLES[f.verdict];
     $('#res-title').className = 'verdict ' + (f.verdict === 'good' ? 's-low' : f.verdict === 'defect' ? 's-high' : 's-medium');
     $('#res-text').textContent = f.source === 'model' ? f.result.explanation : f.verdict === 'good' ? 'Вы отметили плод как годный. Он добавлен в пробу.' : f.verdict === 'defect' ? 'Вы отметили брак. Apron пересчитал риск по вашей пробе.' : 'Плод целый, но вы отметили несоответствие критериям. Оно учитывается отдельно от брака.';
-    $('#res-source').textContent = sourceText(f) + '. ' + boxText(f.box);
+    $('#res-source').textContent = sourceText(f) + '. ' + placeText(f);
     $('#res-correct').textContent = f.source === 'model' ? 'Не согласен с результатом' : 'Изменить отметку';
     renderModel(f.result, $('#res-model'));
     if (f.result && f.source !== 'model') $('#res-model').prepend(element('p', 'model-note', 'Ниже первоначальное наблюдение модели. Итоговая отметка выбрана вручную.'));
@@ -311,7 +363,7 @@
       var figure = element('div', 'latest-photo');
       if (latest.photo) { var img = element('img'); img.src = latest.photo; img.alt = 'Последний проверенный плод'; figure.append(img); }
       else figure.append(element('p', 'small muted', 'Фото недоступно'));
-      figure.append(element('p', '', 'Плод ' + latest.n + ': ' + (latest.source === 'model' ? latest.result.title : TITLES[latest.verdict]).toLowerCase()), element('p', 'muted', sourceText(latest) + '. ' + boxText(latest.box)));
+      figure.append(element('p', '', 'Плод ' + latest.n + ': ' + (latest.source === 'model' ? latest.result.title : TITLES[latest.verdict]).toLowerCase()), element('p', 'muted', sourceText(latest) + '. ' + placeText(latest)));
       if (latest.source === 'model') figure.append(element('p', '', latest.result.explanation)); wrap.append(figure);
     }
     var buttons = $('#rc-decisions'); buttons.replaceChildren();
@@ -331,7 +383,7 @@
     $('#report-interval').textContent = 'Брак: ' + st.defects + ' из ' + st.checked + '. Интервал Уилсона 95 %: ' + decimal.format(interval[0] * 100) + '-' + decimal.format(interval[1] * 100) + ' % при случайном отборе плодов.';
     var hints = boxesWithFindings().length ? ['Первыми вскройте: ' + boxesWithFindings().map(boxText).join('; ') + '. В этих местах в пробе есть брак или отклонения.'] : ['В проверенной части пробы брак и отклонения не отмечены.'];
     var modelHints = S.fruits.filter(function (f) { return f.verdict !== 'good' && f.source === 'model' && f.result && f.result.rc_hint; }).map(function (f) { return f.result.rc_hint; });
-    hints = hints.concat(Array.from(new Set(modelHints)).slice(0, 3), ['Сверьте пломбу. Вскройте 3 своих случайных места.']);
+    hints = hints.concat(Array.from(new Set(modelHints)).slice(0, 3).map(function (h) { return /[.!?]$/.test(h) ? h : h + '.'; }), ['Сверьте пломбу. Вскройте 3 своих случайных места.']);
     $('#report-hints').textContent = hints.join(' ');
     var photos = $('#report-photos'); photos.replaceChildren();
     if (!S.fruits.length) photos.append(element('p', 'note', 'Ваших снимков пока нет.'));
@@ -339,7 +391,7 @@
       var item = element('article', 'fruit-item');
       if (f.photo) { var image = element('img'); image.src = f.photo; image.alt = 'Плод ' + f.n + ': ' + TITLES[f.verdict].toLowerCase(); image.loading = 'lazy'; item.append(image); }
       else item.append(element('div', 'photo-missing', 'Фото недоступно'));
-      var info = element('div'); info.append(element('h3', '', 'Плод ' + f.n + ': ' + TITLES[f.verdict].toLowerCase()), element('p', '', boxText(f.box)), element('p', '', sourceText(f)), element('p', '', time(f.ts)));
+      var info = element('div'); info.append(element('h3', '', 'Плод ' + f.n + ': ' + TITLES[f.verdict].toLowerCase()), element('p', '', placeText(f)), element('p', '', sourceText(f)), element('p', '', time(f.ts)));
       if (f.needsReview) info.append(element('p', 's-medium', 'Условия изменились. Подтвердите результат по новым требованиям.'));
       var edit = element('button', 'text-link', f.needsReview ? 'Подтвердить отметку' : 'Исправить отметку'); edit.type = 'button'; edit.dataset.edit = f.id; edit.setAttribute('aria-label', (f.needsReview ? 'Подтвердить' : 'Исправить') + ' отметку плода ' + f.n); info.append(edit); item.append(info); photos.append(item);
     });
@@ -545,7 +597,19 @@
     if (!('wakeLock' in navigator) || document.visibilityState !== 'visible' || (wakeLock && !wakeLock.released)) return;
     try { wakeLock = await navigator.wakeLock.request('screen'); } catch (error) { /* Optional on unsupported or power-saving devices. */ }
   }
-  function openTools() { $('#tools-model').textContent = CONFIG.analyzeUrl ? 'Модель: адрес сервиса задан, подключение проверяется при отправке снимка.' : 'Модель пока не подключена. Доступна ручная отметка.'; $('#tools').showModal(); }
+  async function checkRelay() {
+    var target = $('#tools-model');
+    if (!CONFIG.analyzeUrl) { target.textContent = 'Модель не подключена: адрес relay не задан. Доступна ручная отметка.'; return; }
+    target.textContent = 'Проверяем связь с моделью';
+    var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 5000), started = performance.now();
+    try {
+      var response = await fetch(relayURL('health'), { cache: 'no-store', signal: ctrl.signal });
+      var payload = await response.json().catch(function () { return null; }), ms = Math.round(performance.now() - started);
+      target.textContent = payload && payload.ok === true && typeof payload.model === 'string' ? 'Модель ' + payload.model.slice(0, 80) + ': связь есть, relay ответил за ' + ms + ' мс.' : payload && payload.error === 'not_configured' ? 'Relay доступен, но модель не настроена: нет провайдера, модели или ключа.' : 'Relay ответил ошибкой ' + response.status + '.';
+    } catch (error) { target.textContent = 'Relay не отвечает. Плоды можно отметить вручную.'; }
+    finally { clearTimeout(timer); }
+  }
+  function openTools() { $('#tools').showModal(); checkRelay(); }
 
   document.addEventListener('click', function (e) {
     var button = e.target.closest('button'); if (!button) return;
