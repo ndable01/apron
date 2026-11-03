@@ -1,0 +1,23 @@
+name = "apron-relay"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Bundle prompts/inspect-system.md as text. JSON imports work without a rule.
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
+[vars]
+# Fill these before deploy. The key goes only into secrets: npx wrangler secret put API_KEY
+PROVIDER = ""
+MODEL = ""
+ALLOWED_ORIGINS = "https://ndable01.github.io,http://localhost:8000,http://127.0.0.1:8000"
+RATE_PER_MIN = "30"
+DAILY_LIMIT = "500"
+MODEL_TIMEOUT_MS = "9000"
+MAX_TOKENS = "800"
+# Optional, sent only when not empty: EFFORT (for example "low"), TEMPERATURE (for example "0"), API_BASE.
+EFFORT = ""
+TEMPERATURE = ""
+API_BASE = ""

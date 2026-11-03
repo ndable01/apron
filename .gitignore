@@ -1,0 +1,4 @@
+relay/.env
+relay/.wrangler/
+node_modules/
+eval/results/
