@@ -398,7 +398,7 @@
     $('#report-back').textContent = canReview() ? 'К решению РЦ' : 'Продолжить проверку партии';
     var card = CONFIG.modelCard;
     $('#model-card').hidden = !(card.model && Number.isInteger(card.checked) && card.checked > 0 && Number.isInteger(card.agreed) && Number.isFinite(card.p90));
-    if (!$('#model-card').hidden) $('#model-card').textContent = 'Проверка модели ' + card.model + ': на ' + card.checked + ' наших фото совпала с нами в ' + card.agreed + '. 9 ответов из 10 быстрее ' + card.p90 + ' с.';
+    if (!$('#model-card').hidden) $('#model-card').textContent = 'Проверка модели ' + card.model + ': на ' + card.checked + ' наших фото совпала с нами в ' + card.agreed + '. 9 ответов из 10 быстрее ' + decimal.format(card.p90) + ' с.';
   }
 
   var MEASUREMENTS = [

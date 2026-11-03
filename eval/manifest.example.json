@@ -1,0 +1,10 @@
+{
+  "spec": { "product": "томаты свежие, круглые, розовые", "grade": "первый", "chain": "Город", "chain_rules": [], "reference": null },
+  "items": [
+    { "file": "photos/good-01.jpg", "verdict": "good", "box": "паллета 7, ящик 23" },
+    { "file": "photos/crack-01.jpg", "verdict": "defect" },
+    { "file": "photos/green-01.jpg", "verdict": "offspec" },
+    { "file": "photos/blur-01.jpg", "verdict": "bad_photo" },
+    { "file": "photos/apple-01.jpg", "verdict": "not_tomato" }
+  ]
+}
