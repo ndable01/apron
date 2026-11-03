@@ -179,7 +179,7 @@
     var nullable = function (v, max) { return v === null || string(v, max); };
     var keys = ['verdict', 'confidence', 'title', 'explanation', 'checks', 'findings', 'not_visible', 'ripeness', 'photo_issue', 'retake_hint', 'label_text', 'rc_hint', 'note'];
     if (!object(r) || keys.some(function (k) { return !Object.prototype.hasOwnProperty.call(r, k); }) || Object.keys(r).some(function (k) { return keys.indexOf(k) < 0; })) fail();
-    if (VERDICTS.concat(['bad_photo', 'not_tomato']).indexOf(r.verdict) < 0 || !Number.isFinite(r.confidence) || r.confidence < 0 || r.confidence > 1 || !string(r.title, 40) || !r.title.trim() || !string(r.explanation, 200)) fail();
+    if (VERDICTS.concat(['bad_photo', 'not_tomato', 'insufficient']).indexOf(r.verdict) < 0 || !Number.isFinite(r.confidence) || r.confidence < 0 || r.confidence > 1 || !string(r.title, 40) || !r.title.trim() || !string(r.explanation, 200)) fail();
     if (!Array.isArray(r.checks) || r.checks.length !== (VERDICTS.indexOf(r.verdict) >= 0 ? 8 : 0)) fail();
     r.checks.forEach(function (c, i) {
       if (!object(c) || Object.keys(c).length !== 3 || c.criterion !== CRITERIA[i] || ['ok', 'fail', 'warn', 'not_visible'].indexOf(c.status) < 0 || !string(c.note, 80)) fail();
@@ -189,6 +189,7 @@
       if (!object(f) || Object.keys(f).length !== 5 || FINDINGS.indexOf(f.type) < 0 || ['у плодоножки', 'на боку', 'на вершине', 'по всему плоду', 'не определить'].indexOf(f.location) < 0 || !string(f.size, 60) || ['незначительный', 'заметный', 'сильный'].indexOf(f.severity) < 0 || ['defect', 'offspec', 'none'].indexOf(f.counts_as) < 0) fail();
     });
     if (!Array.isArray(r.not_visible) || r.not_visible.length > 6 || r.not_visible.some(function (v) { return !string(v, 40); }) || [null, 'незрелый', 'частично окрашен', 'зрелый', 'перезрелый'].indexOf(r.ripeness) < 0 || [null, 'размыто', 'темно', 'пересвет', 'плод обрезан', 'плод закрыт', 'несколько плодов', 'снимок экрана'].indexOf(r.photo_issue) < 0 || !nullable(r.retake_hint, 80) || !nullable(r.label_text, 60) || !nullable(r.rc_hint, 120) || !nullable(r.note, 120)) fail();
+    if (r.verdict === 'insufficient' && (!r.not_visible.length || r.findings.length || r.rc_hint !== null || r.photo_issue !== null)) fail();
     return r;
   }
   function restore(raw) {

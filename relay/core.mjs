@@ -109,6 +109,8 @@ export function checkSemantics(r) {
   const expected = GOOD.includes(r.verdict) ? CRITERIA : [];
   if (r.checks.length !== expected.length || r.checks.some((c, i) => c.criterion !== expected[i])) throw new Error('result.checks: нужен список из 8 критериев по порядку');
   if (!r.title.trim()) throw new Error('result.title: пусто');
+  // "Not enough data" must say what is missing and must not carry a hidden verdict.
+  if (r.verdict === 'insufficient' && (!r.not_visible.length || r.findings.length || r.rc_hint !== null || r.photo_issue !== null)) throw new Error('result: для insufficient нужен not_visible, без findings, rc_hint и photo_issue');
   return r;
 }
 

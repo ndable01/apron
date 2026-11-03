@@ -27,7 +27,8 @@ function post(payload = body, origin = ORIGIN) {
 }
 
 test('prompt examples satisfy the repository schema', () => {
-  assert.equal(examples.length, 4);
+  assert.equal(examples.length, 5);
+  assert.ok(examples.some(e => e.verdict === 'insufficient'));
   for (const e of examples) validate(e, schema);
 });
 
@@ -90,6 +91,20 @@ test('checks must list all 8 criteria in order for counted verdicts', async () =
   const { handle } = relay([anthropicReply(shuffled), anthropicReply(shuffled)]);
   const out = await (await handle(post())).json();
   assert.equal(out.ok, false);
+});
+
+test('"not enough data" passes through, but only with what is missing and no hidden verdict', async () => {
+  const insufficient = examples.find(e => e.verdict === 'insufficient');
+  let r = relay([anthropicReply(insufficient)]);
+  let out = await (await r.handle(post())).json();
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.result, insufficient);
+  for (const bad of [{ not_visible: [] }, { rc_hint: 'Смотрите пятна' }, { photo_issue: 'темно' }, { findings: [{ type: 'гниль', location: 'на боку', size: 'с ноготь', severity: 'заметный', counts_as: 'defect' }] }]) {
+    r = relay([anthropicReply({ ...insufficient, ...bad }), anthropicReply({ ...insufficient, ...bad })]);
+    out = await (await r.handle(post())).json();
+    assert.equal(out.ok, false, JSON.stringify(bad));
+    assert.equal(r.calls.length, 2);
+  }
 });
 
 test('refusal and truncated answers are errors without a retry', async () => {

@@ -4,8 +4,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 
-const VERDICTS = ['good', 'offspec', 'defect', 'bad_photo', 'not_tomato'];
-const NAMES = { good: 'годен', offspec: 'не по критериям', defect: 'брак', bad_photo: 'плохой кадр', not_tomato: 'не томат', error: 'ошибка' };
+const VERDICTS = ['good', 'offspec', 'defect', 'bad_photo', 'not_tomato', 'insufficient'];
+const NAMES = { good: 'годен', offspec: 'не по критериям', defect: 'брак', bad_photo: 'плохой кадр', not_tomato: 'не томат', insufficient: 'не хватает данных', error: 'ошибка' };
 
 function args(argv) {
   const out = { manifest: 'eval/manifest.json', origin: 'http://localhost:8000', repeat: 1, pause: 2100, only: '', relay: process.env.RELAY_URL || '' };

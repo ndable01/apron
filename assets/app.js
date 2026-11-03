@@ -298,6 +298,7 @@
         cameraMessage = (label.box !== null && label.box !== p.box.b ? 'Это ящик ' + label.box + ', а Apron выбрал ящик ' + p.box.b : 'Это паллета ' + label.pallet + ', а Apron выбрал паллету ' + p.box.p) + ': снимок не засчитан.';
         event('Плод ' + p.n + ': попытка снять не тот ящик. На этикетке «' + result.label_text + '», а Apron выбрал: ' + boxText(p.box) + '.'); save(); go('camera'); return;
       }
+      if (result.verdict === 'insufficient') { p.reason = 'insufficient'; save(); go('nolink'); return; }
       if (result.confidence < CONFIG.minConfidence) { p.reason = 'uncertain'; save(); go('nolink'); return; }
       await commitVerdict(result.verdict, 'model');
     } catch (error) {
@@ -336,6 +337,14 @@
     var p = S.pending;
     $('#nl-photo').src = p.photo; $('#nl-count').textContent = 'Плод ' + p.n;
     var uncertain = p.reason === 'uncertain';
+    if (p.reason === 'insufficient' && p.result) {
+      $('#nl-title').textContent = p.result.title; $('#nl-text').textContent = p.result.explanation;
+      $('#nl-source').textContent = 'Модель не дала результата, плод не засчитан. Переснимите его или отметьте сами: отметка будет видна как ручная.';
+      var details = $('#nl-model'); details.replaceChildren(element('p', 'model-note', 'Не хватает: ' + p.result.not_visible.join(', ') + '.'));
+      if (p.result.retake_hint) details.append(element('p', 'model-note', 'Как переснять: ' + p.result.retake_hint.replace(/[.\s]+$/, '').replace(/^./, function (c) { return c.toLowerCase(); }) + '.'));
+      if (p.result.note) details.append(element('p', 'model-note', p.result.note));
+      return;
+    }
     $('#nl-title').textContent = uncertain ? 'Модель не уверена' : p.reason === 'unconnected' ? 'Отметьте плод вручную' : p.reason === 'test' ? 'Тестовый снимок' : 'Модель не ответила';
     $('#nl-text').textContent = uncertain ? p.result.explanation : p.reason === 'unconnected' ? 'Модель пока не подключена. Посмотрите на плод и выберите результат. Фото сохранится в вашей пробе.' : p.reason === 'test' ? 'Подготовленное фото для проверки сценария. Выберите отметку вручную.' : 'Не удалось получить результат. Посмотрите на плод сами и отметьте его или переснимите фото.';
     $('#nl-source').textContent = uncertain ? 'Предложение модели: ' + p.result.title + ', уверенность ' + Math.round(p.result.confidence * 100) + ' %. Итоговую отметку выбираете вы.' : 'Отметка будет видна поставщику и РЦ как ручная.';
@@ -351,7 +360,8 @@
     $('#res-source').textContent = sourceText(f) + '. ' + placeText(f);
     $('#res-correct').textContent = f.source === 'model' ? 'Не согласен с результатом' : 'Изменить отметку';
     renderModel(f.result, $('#res-model'));
-    if (f.result && f.source !== 'model') $('#res-model').prepend(element('p', 'model-note', 'Ниже первоначальное наблюдение модели. Итоговая отметка выбрана вручную.'));
+    if (f.result && f.result.verdict === 'insufficient') $('#res-model').replaceChildren(element('p', 'model-note', 'Модели не хватило данных для вывода, отметка выбрана вручную. Не хватало: ' + f.result.not_visible.join(', ') + '.'));
+    else if (f.result && f.source !== 'model') $('#res-model').prepend(element('p', 'model-note', 'Ниже первоначальное наблюдение модели. Итоговая отметка выбрана вручную.'));
     summary($('#res-summary')); $('#res-next').textContent = st.done ? 'Посмотреть со стороны РЦ' : 'Проверить следующий плод';
   }
   function renderRC() {

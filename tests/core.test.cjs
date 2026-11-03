@@ -91,8 +91,13 @@ test('corrupt storage is rejected instead of silently changing counts', () => {
 });
 test('actual prompt examples satisfy the client contract', () => {
   const examples = fs.readFileSync('prompts/inspect-system.md', 'utf8').split('\n').filter(line => line.startsWith('{"verdict":')).map(JSON.parse);
-  assert.equal(examples.length, 4);
+  assert.equal(examples.length, 5);
   examples.forEach(result => assert.equal(Core.validateResult(result), result));
+  const insufficient = examples.find(r => r.verdict === 'insufficient');
+  assert.throws(() => Core.validateResult({ ...insufficient, not_visible: [] }));
+  assert.throws(() => Core.validateResult({ ...insufficient, rc_hint: 'Смотрите пятна' }));
+  assert.throws(() => Core.validateResult({ ...insufficient, checks: example().checks }));
+  assert.throws(() => Core.addFruit(Core.baseState(), { id: 'x', verdict: 'insufficient' }));
 });
 test('invalid and incomplete provider answers cannot become sample results', () => {
   assert.throws(() => Core.validateResult({ verdict: 'good' }));
