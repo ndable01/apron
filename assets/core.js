@@ -18,7 +18,11 @@
     spec: { product: 'томаты свежие, круглые, розовые', grade: 'первый', chain: 'Город', chain_rules: [], reference: null },
     // Set only after the separately hosted relay is connected. Never put an API key here.
     analyzeUrl: '', analyzeTimeoutMs: 10000, minConfidence: 0.7,
-    modelCard: { model: null, checked: null, agreed: null, p90: null }
+    modelCard: { model: null, checked: null, agreed: null, p90: null },
+    // The room comes only from the link (?room=). CONFIG.room is for a local check, the demo panel warns about it.
+    room: '',
+    // Sync between phones: public ntfy.sh, or the page's own server in the offline router setup (server/relay.js).
+    sync: { server: 'https://ntfy.sh', catchUpSince: '2h' }
   };
   var VERDICTS = ['good', 'offspec', 'defect'];
   var CRITERIA = ['целостность', 'гниль и плесень', 'повреждения', 'свежесть', 'форма', 'окраска и зрелость', 'чистота', 'калибр'];
@@ -119,10 +123,13 @@
     s.seed = { checked: 0, defects: 0, offSpec: 0, defectBoxes: [] }; s.fruits = []; s.pending = null; s.decision = null; s.events = []; s.goal = s.batch.sampleTotal; s.role = 'supplier';
     return s;
   }
+  function isViewer(s) { return !!s.room && s.room.role !== 'supplier'; }
   function stats(s) {
-    var n = s.seed.checked + s.fruits.length;
-    var defects = s.seed.defects + s.fruits.filter(function (f) { return f.verdict === 'defect'; }).length;
-    var offSpec = s.seed.offSpec + s.fruits.filter(function (f) { return f.verdict === 'offspec'; }).length;
+    // RC and hall take the counts from the supplier's tally: a lost photo event must not change the numbers.
+    var t = isViewer(s) && s.room.tally;
+    var n = t ? t.checked : s.seed.checked + s.fruits.length;
+    var defects = t ? t.defects : s.seed.defects + s.fruits.filter(function (f) { return f.verdict === 'defect'; }).length;
+    var offSpec = t ? t.offSpec : s.seed.offSpec + s.fruits.filter(function (f) { return f.verdict === 'offspec'; }).length;
     var dr = risk(defects, n, s.batch.tolerance.defect), or = risk(offSpec, n, s.batch.tolerance.offspec);
     var r = Math.max(dr, or), category = n && or > dr ? 'offspec' : 'defect';
     var needsReview = s.fruits.some(function (f) { return !!f.needsReview; });
@@ -156,6 +163,91 @@
     return st.level === 'low' ? ['wait'] : ['resort', 'wait_strict'];
   }
   function isBox(x) { return !!x && Number.isInteger(x.p) && x.p > 0 && x.p <= 1000 && Number.isInteger(x.b) && x.b > 0 && x.b <= 10000; }
+
+  // Shared room: the supplier owns the sample, RC and hall replay its events.
+  var ROOM_RE = /^[A-Za-z0-9_-]{4,64}$/;
+  function roomState(id, role) {
+    var s = baseState(true);
+    s.room = { id: id, role: role, cursor: null, box: null, shooting: null, tally: null, wrongbox: null, outbox: [] };
+    return s;
+  }
+  function resetRoomSample(s) {
+    s.seed = JSON.parse(JSON.stringify(CONFIG.seed)); s.fruits = []; s.pending = null; s.decision = null; s.events = []; s.goal = s.batch.sampleTotal;
+    if (s.room) { s.room.box = null; s.room.shooting = null; s.room.tally = null; s.room.wrongbox = null; }
+    return s;
+  }
+  function boxesWithFindings(s) {
+    if (isViewer(s) && s.room.tally) return s.room.tally.boxes.slice();
+    var boxes = s.seed.defectBoxes.slice();
+    s.fruits.filter(function (f) { return f.verdict !== 'good'; }).forEach(function (f) { if (!boxes.some(function (b) { return b.p === f.box.p && b.b === f.box.b; })) boxes.push({ p: f.box.p, b: f.box.b }); });
+    return boxes;
+  }
+  function tally(s) { var st = stats(s); return { goal: s.goal, checked: st.checked, defects: st.defects, offSpec: st.offSpec, boxes: boxesWithFindings(s) }; }
+  var VERDICT_WORDS = { good: 'годен', offspec: 'не по критериям', defect: 'брак' };
+  function boxWords(b) { return 'паллета ' + b.p + ', ящик ' + b.b; }
+  // Applies one validated room event. Returns what the screen should do; feed lines are built from event data only.
+  function applyRoomEvent(s, e, decisionText) {
+    var out = { changed: false, vibrate: false, reset: false, photo: false };
+    var feed = function (text) { s.events.push({ text: text, ts: e.ts }); s.events = s.events.slice(-30); out.changed = true; };
+    if (!s.room) return out;
+    if (e.t === 'reset') { resetRoomSample(s); feed('Проба сброшена: снова ' + s.seed.checked + ' из ' + s.goal + '.'); out.reset = true; return out; }
+    if (e.t === 'decision') {
+      if (allowedDecisions(s).indexOf(e.kind) < 0 || (s.decision && s.decision.ts >= e.ts)) return out;
+      s.decision = { kind: e.kind, ts: e.ts }; feed(decisionText(e.kind)); out.vibrate = !isViewer(s); return out;
+    }
+    if (!isViewer(s)) return out;
+    var r = s.room;
+    if (e.t === 'box') {
+      var again = r.box && r.box.n === e.n && (r.box.box.p !== e.box.p || r.box.box.b !== e.box.b);
+      r.box = { n: e.n, box: e.box, ts: e.ts }; r.shooting = null; r.wrongbox = null;
+      feed((again ? 'Apron выбрал заново: ' : 'Apron выбрал: ') + boxWords(e.box) + '. Плод ' + e.n + '.');
+    } else if (e.t === 'shooting') {
+      if (!r.box || r.box.n === e.n) { r.shooting = e.n; out.changed = true; }
+    } else if (e.t === 'wrongbox') {
+      r.wrongbox = { n: e.n, box: e.box, label: e.label, ts: e.ts };
+      feed('Попытка снять не тот ящик. На этикетке «' + e.label + '», а Apron выбрал: ' + boxWords(e.box) + '.');
+    } else if (e.t === 'state') {
+      if (!r.tally || e.ts >= r.tally.ts) { r.tally = { goal: e.goal, checked: e.checked, defects: e.defects, offSpec: e.offSpec, boxes: e.boxes, ts: e.ts }; s.goal = e.goal; out.changed = true; }
+    } else if (e.t === 'fruit') {
+      var i = s.fruits.findIndex(function (f) { return f.id === e.id || f.n === e.n; }), old = i >= 0 ? s.fruits[i] : null;
+      if (old && old.ts > e.ts) return out;
+      var fruit = { id: e.id, n: e.n, box: e.box, ts: e.ts, photo: e.thumb, photoUrl: e.photo, verdict: e.verdict, source: e.source, result: null, ms: e.ms, corrected: e.corrected,
+        remote: { title: e.title, explanation: e.explanation, conf: e.conf, rc_hint: e.rc_hint, findings: e.findings } };
+      if (e.boxCheck) fruit.boxCheck = e.boxCheck;
+      if (e.shotDelay !== undefined) fruit.shotDelay = e.shotDelay;
+      // Same mark sent again with the photo that did not get through earlier: swap the photo quietly.
+      if (old && old.id === e.id && old.verdict === e.verdict && old.source === e.source && old.corrected === e.corrected) {
+        if (!fruit.photo) fruit.photo = old.photo;
+        s.fruits[i] = fruit; out.changed = true; out.photo = true; return out;
+      }
+      if (old) s.fruits[i] = fruit; else { s.fruits.push(fruit); s.fruits.sort(function (a, b) { return a.n - b.n; }); if (s.fruits.length > 2000) s.fruits.shift(); }
+      if (e.tally && (!r.tally || e.ts >= r.tally.ts)) { r.tally = Object.assign({}, e.tally, { ts: e.ts }); s.goal = e.tally.goal; }
+      s.decision = null;
+      if (r.box && r.box.n <= e.n) r.box = null;
+      if (r.shooting && r.shooting <= e.n) r.shooting = null;
+      r.wrongbox = null;
+      var how = e.source === 'model' ? (e.conf === null ? 'модель' : 'уверенность ' + Math.round(e.conf * 100) + ' %') : e.source === 'test' ? 'тест, отмечено вручную' : 'отмечено вручную';
+      feed(old && old.id === e.id ? 'Плод ' + e.n + ': отметка исправлена на «' + VERDICT_WORDS[e.verdict] + '».' : 'Плод ' + e.n + ': ' + VERDICT_WORDS[e.verdict] + ', ' + how + '.');
+      out.vibrate = !old && r.role === 'rc'; out.photo = true;
+    }
+    return out;
+  }
+  function validRoom(s) {
+    var r = s.room, ok = function (v) { if (!v) throw new Error('Неверные данные комнаты'); };
+    ok(r && typeof r === 'object' && ROOM_RE.test(r.id) && ['supplier', 'rc', 'hall'].indexOf(r.role) >= 0 && (r.cursor === null || (typeof r.cursor === 'string' && r.cursor.length <= 64)));
+    ok(r.box === null || (r.box && Number.isInteger(r.box.n) && isBox(r.box.box) && Number.isFinite(r.box.ts)));
+    ok(r.shooting === null || Number.isInteger(r.shooting));
+    ok(r.tally === null || (r.tally && Number.isInteger(r.tally.goal) && r.tally.goal >= 1 && Number.isInteger(r.tally.checked) && r.tally.checked >= 0 && Number.isInteger(r.tally.defects) && Number.isInteger(r.tally.offSpec) && r.tally.defects >= 0 && r.tally.offSpec >= 0 && r.tally.defects + r.tally.offSpec <= r.tally.checked && Array.isArray(r.tally.boxes) && r.tally.boxes.every(isBox) && Number.isFinite(r.tally.ts)));
+    ok(r.wrongbox === undefined || r.wrongbox === null || (r.wrongbox && isBox(r.wrongbox.box) && typeof r.wrongbox.label === 'string' && r.wrongbox.label.length <= 60));
+    if (r.wrongbox === undefined) r.wrongbox = null;
+    ok(Array.isArray(r.outbox) && r.outbox.length <= 60 && r.outbox.every(function (x) { return x && typeof x === 'object' && !Array.isArray(x); }));
+  }
+  function validRemoteFruit(f) {
+    var text = function (v, max) { return v === null || (typeof v === 'string' && v.length <= max); };
+    var m = f.remote;
+    if (f.result !== null || !m || !text(m.title, 40) || !text(m.explanation, 200) || !text(m.rc_hint, 120) || !(m.conf === null || (Number.isFinite(m.conf) && m.conf >= 0 && m.conf <= 1)) || !Array.isArray(m.findings) || m.findings.length > 6 || !m.findings.every(function (x) { return FINDINGS.indexOf(x) >= 0; })) throw new Error('Неверный плод из комнаты');
+    if (!(f.ms === null || (Number.isInteger(f.ms) && f.ms >= 0)) || typeof f.corrected !== 'boolean') throw new Error('Неверный плод из комнаты');
+  }
   // Stage cards from CONFIG.boxes for the example; own parties draw from their own pallets and boxes.
   function pickBox(batch, random) {
     random = random || Math.random;
@@ -199,14 +291,19 @@
     validateBatch(s.batch);
     if (!s.seed || !Number.isInteger(s.seed.checked) || !Number.isInteger(s.seed.defects) || !Number.isInteger(s.seed.offSpec) || s.seed.checked < 0 || s.seed.checked > 1000 || s.seed.defects < 0 || s.seed.offSpec < 0 || s.seed.defects + s.seed.offSpec > s.seed.checked || !Array.isArray(s.seed.defectBoxes) || !s.seed.defectBoxes.every(isBox)) throw new Error('Неверные исходные данные');
     if (s.seed.checked + s.fruits.length > 2000) throw new Error('Слишком большая проба');
-    var seen = new Set();
+    if (s.room !== undefined && s.room !== null) validRoom(s); else delete s.room;
+    var viewer = isViewer(s), seen = new Set(), lastN = 0;
     s.fruits.forEach(function (f, i) {
-      if (!f || typeof f.id !== 'string' || seen.has(f.id) || f.n !== s.seed.checked + i + 1 || VERDICTS.indexOf(f.verdict) < 0 || ['model', 'manual', 'test'].indexOf(f.source) < 0 || !isBox(f.box) || !Number.isFinite(f.ts) || (f.photo !== null && !isPhoto(f.photo))) throw new Error('Неверный плод');
-      if (f.source === 'model' && (!f.result || !Number.isFinite(f.ms) || f.ms < 0)) throw new Error('Неверный источник результата');
+      // Remote fruits on RC and hall may have gaps if an event was lost; the supplier's own list is contiguous.
+      if (!f || typeof f.id !== 'string' || seen.has(f.id) || (viewer ? !Number.isInteger(f.n) || f.n <= lastN || f.n > 2000 : f.n !== s.seed.checked + i + 1) || VERDICTS.indexOf(f.verdict) < 0 || ['model', 'manual', 'test'].indexOf(f.source) < 0 || !isBox(f.box) || !Number.isFinite(f.ts) || (f.photo !== null && !isPhoto(f.photo))) throw new Error('Неверный плод');
+      if (f.photoUrl !== undefined && f.photoUrl !== null && !(typeof f.photoUrl === 'string' && f.photoUrl.length <= 300 && /^https?:\/\/[^\s"'<>]+$/.test(f.photoUrl))) throw new Error('Неверный плод');
+      if (viewer) validRemoteFruit(f);
+      else if (f.source === 'model' && (!f.result || !Number.isFinite(f.ms) || f.ms < 0)) throw new Error('Неверный источник результата');
       if ((f.boxCheck !== undefined && ['confirmed', 'unconfirmed'].indexOf(f.boxCheck) < 0) || (f.shotDelay !== undefined && (!Number.isInteger(f.shotDelay) || f.shotDelay < 0))) throw new Error('Неверный плод');
       if (f.result !== null) validateResult(f.result);
-      seen.add(f.id);
+      seen.add(f.id); lastN = f.n;
     });
+    if (viewer && s.pending) s.pending = null;
     if (s.pending && (typeof s.pending.id !== 'string' || seen.has(s.pending.id) || s.pending.n !== s.seed.checked + s.fruits.length + 1 || !isBox(s.pending.box) || !Number.isFinite(s.pending.ts) || (s.pending.photo !== null && !isPhoto(s.pending.photo)))) throw new Error('Неверный снимок');
     if (s.pending && s.pending.result) validateResult(s.pending.result);
     if (!Array.isArray(s.events)) s.events = [];
@@ -224,5 +321,6 @@
     if (Math.abs(interval[0] * 100 - 1.8477) > 0.001 || Math.abs(interval[1] * 100 - 21.3235) > 0.001) throw new Error('Интервал Уилсона');
     return lines.concat(['После 2 из 30: ещё 10 годных плодов', 'Интервал Уилсона: 1,8-21,3 %']);
   }
-  return { CONFIG: CONFIG, VERDICTS: VERDICTS, risk: risk, wilson: wilson, defaultBatch: defaultBatch, validateBatch: validateBatch, updateBatch: updateBatch, resetSample: resetSample, baseState: baseState, stats: stats, extraNeeded: extraNeeded, addFruit: addFruit, correctFruit: correctFruit, allowedDecisions: allowedDecisions, pickBox: pickBox, labelCheck: labelCheck, validateResult: validateResult, restore: restore, selftest: selftest };
+  return { roomState: roomState, resetRoomSample: resetRoomSample, applyRoomEvent: applyRoomEvent, tally: tally, boxesWithFindings: boxesWithFindings, isViewer: isViewer,
+    CONFIG: CONFIG, VERDICTS: VERDICTS, risk: risk, wilson: wilson, defaultBatch: defaultBatch, validateBatch: validateBatch, updateBatch: updateBatch, resetSample: resetSample, baseState: baseState, stats: stats, extraNeeded: extraNeeded, addFruit: addFruit, correctFruit: correctFruit, allowedDecisions: allowedDecisions, pickBox: pickBox, labelCheck: labelCheck, validateResult: validateResult, restore: restore, selftest: selftest };
 });

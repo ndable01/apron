@@ -1283,3 +1283,55 @@ details[open]>summary:after {
     font-size:20pt
   }
 }
+
+/* Shared room: connection line and role links */
+.sync-line { margin-top: 2px; }
+.room-link { overflow-wrap: anywhere; }
+#tools-room > * + * { margin-top: 8px; }
+#tools-room .btn-line { margin-top: 14px; }
+.latest-photo .photo-missing { width: 100%; height: auto; aspect-ratio: 1.25; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: var(--fill); color: var(--muted); font-size: 14px; }
+
+/* Hall screen on the projector, 16:9, read from about 10 metres. Sizes follow the screen width (1920 px base). */
+.role-hall #app { max-width: none; }
+.role-hall, .role-hall #app { background: var(--ground); }
+.hall { position: relative; padding: clamp(16px, 2vw, 48px) clamp(16px, 2.4vw, 56px); }
+.hall-start { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(14px, 1.8vw, 40px); text-align: center; }
+.hall-wordmark { font-size: clamp(36px, 4.2vw, 96px); min-height: 0; padding: 0; }
+.hall-lead { font-size: clamp(24px, 3vw, 68px); line-height: 1.2; font-weight: 600; max-width: 70vw; text-wrap: balance; }
+.hall-qr { width: min(36vh, 26vw, 520px); min-width: 180px; padding: clamp(8px, .8vw, 18px); background: #FFF; border: 1px solid var(--line); border-radius: clamp(12px, 1.2vw, 24px); }
+.hall-qr svg { display: block; width: 100%; height: auto; }
+.hall-qr-caption { font-size: clamp(18px, 2vw, 46px); line-height: 1.25; color: var(--soft); }
+.hall-live { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.hall-top { display: flex; align-items: baseline; justify-content: space-between; gap: 2vw; }
+.hall-top .wordmark { font-size: clamp(24px, 2.2vw, 52px); min-height: 0; padding: 0; }
+.hall-batch { font-size: clamp(14px, 1.35vw, 32px); line-height: 1.3; color: var(--muted); text-align: right; }
+.hall-grid { flex: 1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, .95fr); gap: clamp(12px, 1.6vw, 40px); margin-top: clamp(12px, 1.4vw, 32px); }
+.hall-col { min-width: 0; display: flex; flex-direction: column; padding: clamp(14px, 1.6vw, 38px); background: var(--surface); border: 1px solid var(--line); border-radius: clamp(14px, 1.4vw, 32px); }
+.hall-photo { width: 100%; max-width: 29.2vw; max-height: 52vh; aspect-ratio: 1; align-self: center; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: clamp(10px, 1vw, 24px); background: var(--fill); }
+.hall-photo img, .hall-photo .photo-missing { width: 100%; height: 100%; object-fit: cover; border-radius: 0; animation: hall-in .2s ease-out; }
+.hall-photo .photo-missing { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: clamp(16px, 1.6vw, 38px); }
+.hall-wait { padding: 2vw; text-align: center; color: var(--muted); font-size: clamp(18px, 1.9vw, 44px); line-height: 1.25; animation: hall-in .2s ease-out; }
+@keyframes hall-in { from { opacity: 0; } to { opacity: 1; } }
+.hall-verdict { margin-top: clamp(10px, 1.1vw, 26px); font-size: clamp(20px, 2vw, 48px); line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hall-explain { margin-top: clamp(6px, .6vw, 14px); font-size: clamp(15px, 1.35vw, 32px); line-height: 1.35; color: var(--soft); }
+.hall-place { margin-top: clamp(6px, .6vw, 14px); font-size: clamp(14px, 1.2vw, 28px); color: var(--muted); }
+.hall-kicker { font-size: clamp(16px, 1.5vw, 36px); line-height: 1.25; font-weight: 600; }
+.hall-number { margin-top: clamp(8px, 1vw, 24px); font-size: clamp(56px, 7.3vw, 176px); line-height: 1; font-weight: 500; letter-spacing: -.02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hall-other { margin-top: clamp(6px, .6vw, 14px); font-size: clamp(14px, 1.2vw, 28px); color: var(--soft); font-variant-numeric: tabular-nums; }
+.hall-risk { margin-top: clamp(14px, 1.6vw, 38px); font-size: clamp(22px, 2.4vw, 58px); line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hall-rec { margin-top: clamp(8px, 1vw, 24px); font-size: clamp(15px, 1.45vw, 34px); line-height: 1.35; }
+.hall-money { margin-top: auto; padding-top: clamp(8px, 1vw, 24px); font-size: clamp(13px, 1.15vw, 28px); line-height: 1.4; border-top-color: rgba(28, 28, 26, .12); }
+.hall-sample.level-low { background: var(--good-bg); border-color: transparent; }
+.hall-sample.level-medium { background: var(--warn-bg); border-color: transparent; }
+.hall-sample.level-high { background: var(--bad-bg); border-color: transparent; }
+.hall-decision { margin-top: clamp(8px, 1vw, 24px); font-size: clamp(24px, 2.6vw, 62px); line-height: 1.15; font-weight: 600; }
+.hall-events { margin-top: clamp(12px, 1.4vw, 32px); }
+.hall-events li { gap: clamp(8px, 1vw, 24px); padding: clamp(8px, .7vw, 16px) 0; font-size: clamp(13px, 1.1vw, 26px); line-height: 1.35; }
+.hall-final { margin-top: clamp(12px, 1.4vw, 32px); padding: clamp(12px, 1.2vw, 28px) clamp(16px, 1.6vw, 38px); border-radius: clamp(12px, 1.2vw, 28px); background: var(--text); color: #FFF; font-size: clamp(20px, 2.2vw, 52px); line-height: 1.2; font-weight: 600; text-align: center; }
+.hall-sync { position: absolute; right: clamp(12px, 1.2vw, 28px); bottom: clamp(6px, .8vw, 18px); font-size: clamp(11px, .9vw, 20px); color: var(--muted); }
+@media (max-width: 900px), (orientation: portrait) {
+  .hall-grid { grid-template-columns: minmax(0, 1fr); }
+  .hall-photo { max-width: none; }
+  .hall-sync { position: static; margin-top: 12px; }
+}
+.hall-sync.s-high, .sync-line.s-high { color: var(--bad); }
