@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Apron: карточки ящиков A4</title>
+<style>
+  @font-face { font-family: Onest; src: url('../fonts/onest-400.ttf') format('truetype'); font-weight: 400; }
+  @font-face { font-family: Onest; src: url('../fonts/onest-600.ttf') format('truetype'); font-weight: 600; }
+  @page { size: A4 portrait; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #FFFFFF; color: #1C1C1A; font-family: Onest, system-ui, sans-serif; }
+  .card { width: 210mm; height: 297mm; padding: 22mm 16mm 14mm; display: flex; flex-direction: column; align-items: center; gap: 6mm; text-align: center; page-break-after: always; break-after: page; }
+  .card:last-child { page-break-after: auto; break-after: auto; }
+  .label { margin: 0; font-size: 46pt; line-height: 1.1; font-weight: 600; letter-spacing: -0.01em; }
+  .label-small { font-size: 30pt; }
+  .field { width: 140mm; height: 140mm; border: 1.2mm dashed #B9B6AC; border-radius: 8mm; background: #F2F1EC; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8mm; }
+  .field span { font-size: 14pt; color: #8A887F; }
+  .foot { margin: auto 0 0; font-size: 13pt; color: #6A6963; }
+</style>
+</head>
+<body>
+  <section class="card"><p class="label">Паллета 7, ящик 23</p><div class="field"><span>Положите плод сюда</span></div><p class="label label-small">Паллета 7, ящик 23</p><p class="foot">Apron. Положите плод в поле плодоножкой вверх. Надпись должна попасть в кадр.</p></section>
+  <section class="card"><p class="label">Паллета 3, ящик 11</p><div class="field"><span>Положите плод сюда</span></div><p class="label label-small">Паллета 3, ящик 11</p><p class="foot">Apron. Положите плод в поле плодоножкой вверх. Надпись должна попасть в кадр.</p></section>
+  <section class="card"><p class="label">Паллета 12, ящик 5</p><div class="field"><span>Положите плод сюда</span></div><p class="label label-small">Паллета 12, ящик 5</p><p class="foot">Apron. Положите плод в поле плодоножкой вверх. Надпись должна попасть в кадр.</p></section>
+</body>
+</html>
