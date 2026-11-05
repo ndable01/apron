@@ -2,6 +2,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Core = require('../assets/core.js');
+// Room scenarios were written for a 28-fruit start; the stage start itself is checked in stage.test.cjs.
+Core.CONFIG.seed.checked = 28;
 const Room = require('../assets/room.js');
 const QR = require('../assets/qr.js');
 

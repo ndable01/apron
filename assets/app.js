@@ -699,7 +699,7 @@
       ['Партия', plural(b.pallets, 'паллета', 'паллеты', 'паллет') + ' по ' + plural(b.boxesPerPallet, 'ящику', 'ящика', 'ящиков'), 'Стоимость ' + number.format(b.revenue) + ' ₽'],
       ['Проба', b.sampleTotal + ' плодов', 'Допуск сети: брак ' + precise.format(b.tolerance.defect) + ' %, не по критериям ' + precise.format(b.tolerance.offspec) + ' %']
     ].forEach(function (r) { var field = element('div', 'start-field'); field.append(element('span', 'start-label', r[0]), element('span', 'start-value', r[1]), element('span', 'start-hint', r[2])); list.append(field); });
-    $('#start-note').textContent = 'В примере утром уже проверено ' + CONFIG.seed.checked + ' плодов из ' + CONFIG.sampleTotal + ', найден ' + CONFIG.seed.defects + ' брак. Вам осталось ' + fruitCount(CONFIG.sampleTotal - CONFIG.seed.checked) + '.';
+    $('#start-note').textContent = 'В примере утром уже проверено ' + CONFIG.seed.checked + ' плодов из ' + CONFIG.sampleTotal + ', найден ' + CONFIG.seed.defects + ' брак. ' + (CONFIG.sampleTotal - CONFIG.seed.checked === 1 ? 'Вам остался один плод: от него зависит, поедет ли партия как есть.' : 'Вам осталось ' + fruitCount(CONFIG.sampleTotal - CONFIG.seed.checked) + '.');
   }
   // The box is chosen before the camera opens and shown on its own screen, so the random choice is visible.
   function renderPick() {

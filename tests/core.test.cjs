@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const Core = require('../assets/core.js');
+// These scenarios were written for a 28-fruit start; the logic they check does not depend on the stage start (see stage.test.cjs).
+Core.CONFIG.seed.checked = 28;
 const photo = 'data:image/jpeg;base64,/9j/AA==';
 function fruit(id, verdict, n = 29) { return { id, n, verdict, box: { p: 7, b: 23 }, source: 'manual', photo, result: null, ts: 1793510000000 }; }
 function example() { return JSON.parse(fs.readFileSync('prompts/inspect-system.md', 'utf8').split('\n').find(line => line.startsWith('{"verdict":"good"'))); }

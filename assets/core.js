@@ -8,7 +8,8 @@
   // Demo assumptions, not a verified specification of a retail chain.
   var CONFIG = {
     sampleTotal: 30,
-    seed: { checked: 28, defects: 1, offSpec: 0, defectBoxes: [{ p: 7, b: 12 }] },
+    // 29 of 30 checked in the example, so a judge takes one photo: good gives 1 of 30 (low risk), defect gives 2 of 30 (high).
+    seed: { checked: 29, defects: 1, offSpec: 0, defectBoxes: [{ p: 7, b: 12 }] },
     tolerance: { defect: 10, offspec: 10 },
     risk: { low: 15, high: 25 },
     boxes: [{ p: 7, b: 23 }, { p: 3, b: 11 }, { p: 12, b: 5 }],
@@ -315,7 +316,8 @@
   function selftest() {
     var cases = [[0, 30, 1], [1, 28, 12], [1, 29, 11], [1, 30, 10], [2, 29, 31], [2, 30, 29]];
     var lines = cases.map(function (x) { var got = Math.round(risk(x[0], x[1], 10) * 100); if (got !== x[2]) throw new Error('Риск ' + x[0] + '/' + x[1]); return x[0] + ' из ' + x[1] + ': ' + got + ' %'; });
-    var s = baseState(); addFruit(s, { id: 'a', verdict: 'good' }); addFruit(s, { id: 'b', verdict: 'defect' });
+    // Control case from the specification: 1 defect in 29, then one more defect gives 2 of 30 and needs 10 more good fruit.
+    var s = baseState(); s.seed = { checked: 29, defects: 1, offSpec: 0, defectBoxes: [] }; s.goal = 30; addFruit(s, { id: 'b', verdict: 'defect' });
     if (extraNeeded(s) !== 10) throw new Error('Дополнительная проба');
     var interval = wilson(2, 30);
     if (Math.abs(interval[0] * 100 - 1.8477) > 0.001 || Math.abs(interval[1] * 100 - 21.3235) > 0.001) throw new Error('Интервал Уилсона');
