@@ -1446,3 +1446,10 @@ details[open]>summary:after {
   .pass-section { break-inside: auto; }
   .pass-fruits { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
+
+/* Plain-language lines for viewers who have never shipped vegetables */
+.cl-plain { font-size: 13px; line-height: 18px; color: var(--muted); }
+.cl-plain + .cl-sum { margin-top: 2px; color: var(--soft); }
+.sample-note { margin-top: 8px; }
+.risk-explain { margin-top: 6px; }
+.unverified { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); font-size: 13px; line-height: 19px; }

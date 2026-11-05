@@ -173,7 +173,20 @@
     metric.append(element('span', '', category ? 'Не по критериям' : 'Брак в пробе'), element('strong', '', (category ? st.offSpec : st.defects) + ' из ' + st.checked));
     var other = element('p', 'small muted', category ? 'Брак: ' + st.defects + ' из ' + st.checked : 'Не по критериям: ' + st.offSpec + ' из ' + st.checked);
     var line = element('div', 'risk-line'); line.append(element('span', '', 'Риск среза'), element('strong', 's-' + st.level, riskText(st)));
-    target.append(metric, other, line, element('p', 'recommendation', recommendation(st)));
+    target.append(metric, other);
+    var manual = unverified(); if (manual.count) target.append(element('p', 'small unverified', unverifiedText(manual)));
+    target.append(line, element('p', 'small muted risk-explain', RISK_PLAIN), element('p', 'recommendation', recommendation(st)));
+  }
+  var RISK_PLAIN = 'Срез - когда сеть снижает оплату за брак сверх допуска. Риск показывает, насколько это вероятно по вашей пробе.';
+  // Fruits marked by hand (no model answer, a test or a correction) still count, but are always shown apart:
+  // the supplier vouches for them, and the RC knows which boxes to open first.
+  function unverified() {
+    var list = S.fruits.filter(function (f) { return f.source !== 'model'; }), boxes = [];
+    list.forEach(function (f) { if (!boxes.some(function (b) { return b.p === f.box.p && b.b === f.box.b; })) boxes.push({ p: f.box.p, b: f.box.b }); });
+    return { count: list.length, total: S.fruits.length, boxes: boxes };
+  }
+  function unverifiedText(u) {
+    return 'Без проверки моделью: ' + u.count + ' из ' + plural(u.total, 'снимка', 'снимков', 'снимков') + ' (' + Math.round(u.count / u.total * 100) + ' %). Отметку поставил поставщик вручную, это на его ответственности' + (u.boxes.length ? '. Ящики: ' + u.boxes.map(boxText).join('; ') : '') + '.';
   }
   function decisionText(kind) {
     if (kind === 'wait') return S.batch.rc + ' сети «' + S.batch.chain + '» ждёт машину' + (S.batch.ramp ? ': рампа ' + S.batch.ramp : '') + (S.batch.slotTime ? ', ' + S.batch.slotTime : '') + '.';
@@ -195,6 +208,10 @@
   function renderSupplier() {
     var st = Core.stats(S), pendingPhoto = S.pending && S.pending.photo;
     $('#sup-count').textContent = st.checked + ' из ' + S.goal;
+    var left = Math.max(0, S.goal - st.checked), manual = unverified();
+    $('#sup-sample-note').hidden = !(S.batch.example && S.seed.checked);
+    $('#sup-sample-note').textContent = 'Для показа проба уменьшена: в жизни поставщик проверяет больше плодов и из большего числа ящиков. ' + S.seed.checked + ' уже проверены утром' + (left ? ', вам ' + (left === 1 ? 'остался один плод' : 'осталось ' + fruitCount(left)) : '') + '.';
+    $('#sup-unverified').hidden = !manual.count; if (manual.count) $('#sup-unverified').textContent = unverifiedText(manual);
     $('#sup-progress').max = S.goal; $('#sup-progress').value = st.checked;
     $('#sup-number').parentElement.hidden = !st.checked; $('#sup-other').hidden = !st.checked;
     $('#sup-category').textContent = st.category === 'offspec' ? 'Не по критериям' : 'Брак в пробе';
@@ -225,13 +242,14 @@
       var li = element('li', 'cl-section'), b = element('button', 'cl-row cl-link'); b.type = 'button'; b.dataset.section = sec.key;
       if (wide.matches && sec.key === sectionKey) b.setAttribute('aria-current', 'true');
       var mark = element('span'); checkMark(mark, sec.done); mark.setAttribute('aria-hidden', 'true');
-      var text = element('span', 'cl-text'); text.append(element('span', 'cl-title', sec.title), element('span', 'cl-sum', sec.summary));
+      var text = element('span', 'cl-text'); text.append(element('span', 'cl-title', sec.title), element('span', 'cl-plain', sec.plain), element('span', 'cl-sum', sec.summary));
       var chev = element('span', 'cl-chev'); chev.innerHTML = CHEVRON;
       b.append(mark, text, chev); b.setAttribute('aria-label', sec.title + (sec.done ? ', готово' : ', не заполнено') + '. ' + sec.summary);
       li.append(b); list.insertBefore(li, anchor);
     });
     checkMark($('#photo-mark'), st.done && !st.needsReview);
-    $('#photo-sum').textContent = 'Проверено ' + st.checked + ' из ' + S.goal + (st.done ? ', проба закончена' : '');
+    var manual = unverified();
+    $('#photo-sum').textContent = 'Проверено ' + st.checked + ' из ' + S.goal + (st.done ? ', проба закончена' : '') + (manual.count ? '. Без проверки моделью: ' + manual.count : '');
     checkMark($('#rc-mark'), !!S.decision);
     $('#rc-sum').textContent = S.decision ? DECISION_NAMES[S.decision.kind] + ', ' + time(S.decision.ts) : canReview() ? 'Можно передать результат РЦ' : 'Ждёт конца пробы';
     var done = sections.filter(function (x) { return x.done; }).length + (st.done && !st.needsReview ? 1 : 0) + (S.decision ? 1 : 0);
@@ -285,7 +303,7 @@
   function renderPassport() {
     var doc = $('#pass-doc'), b = S.batch, st = Core.stats(S), sections = checkSections(), reqs = Checks.requirements(sections), now = new Date();
     var modelHints = Array.from(new Set(S.fruits.filter(function (f) { return f.verdict !== 'good' && info(f) && info(f).rc_hint; }).map(function (f) { var h = info(f).rc_hint; return /[.!?]$/.test(h) ? h : h + '.'; }))).slice(0, 3);
-    var trip = Checks.transit(b, { boxes: boxesWithFindings(), hints: modelHints });
+    var manual = unverified(), trip = Checks.transit(b, { boxes: boxesWithFindings(), hints: modelHints, unverified: manual.boxes });
     doc.replaceChildren();
     var head = element('header', 'pass-head');
     head.append(element('p', 'pass-brand', 'Apron'), element('h1', 'pass-title', 'Паспорт партии ' + b.code), element('p', 'pass-sub', batchTitle() + '. ' + b.supplier + ' для сети «' + b.chain + '», ' + b.rc + '.'));
@@ -297,6 +315,7 @@
     var sum = passSection(doc, 'Заключение'), list = element('ul', 'pass-list');
     list.append(element('li', '', reqs.total ? 'Требования сети: выполнено ' + reqs.met + ' из ' + reqs.total + '.' : 'Требования сети записаны текстом в данных партии и автоматически не сверялись.'));
     list.append(element('li', '', 'Проба: брак ' + st.defects + ' из ' + st.checked + ', не по критериям ' + st.offSpec + ' из ' + st.checked + '. Риск среза ' + riskText(st) + '.'));
+    if (manual.count) list.append(element('li', '', unverifiedText(manual)));
     list.append(element('li', '', recommendation(st)));
     list.append(element('li', '', S.decision ? decisionText(S.decision.kind) + ' ' + finalText(S.decision.kind) : 'Решение РЦ ещё не принято.'));
     sum.append(list);
@@ -669,6 +688,8 @@
     $('#report-interval').textContent = 'Брак: ' + st.defects + ' из ' + st.checked + '. Интервал Уилсона 95 %: ' + decimal.format(interval[0] * 100) + '-' + decimal.format(interval[1] * 100) + ' % при случайном отборе плодов.';
     var hints = boxesWithFindings().length ? ['Первыми вскройте: ' + boxesWithFindings().map(boxText).join('; ') + '. В этих местах в пробе есть брак или отклонения.'] : ['В проверенной части пробы брак и отклонения не отмечены.'];
     var modelHints = S.fruits.filter(function (f) { return f.verdict !== 'good' && info(f) && info(f).rc_hint; }).map(function (f) { return info(f).rc_hint; });
+    var manualBoxes = unverified().boxes;
+    if (manualBoxes.length) hints.push('Проверьте ящики, где плоды отмечены вручную без проверки моделью: ' + manualBoxes.map(boxText).join('; ') + '.');
     hints = hints.concat(Array.from(new Set(modelHints)).slice(0, 3).map(function (h) { return /[.!?]$/.test(h) ? h : h + '.'; }), ['Сверьте пломбу. Вскройте 3 своих случайных места.']);
     $('#report-hints').textContent = hints.join(' ');
     var photos = $('#report-photos'); photos.replaceChildren();
@@ -699,7 +720,7 @@
       ['Партия', plural(b.pallets, 'паллета', 'паллеты', 'паллет') + ' по ' + plural(b.boxesPerPallet, 'ящику', 'ящика', 'ящиков'), 'Стоимость ' + number.format(b.revenue) + ' ₽'],
       ['Проба', b.sampleTotal + ' плодов', 'Допуск сети: брак ' + precise.format(b.tolerance.defect) + ' %, не по критериям ' + precise.format(b.tolerance.offspec) + ' %']
     ].forEach(function (r) { var field = element('div', 'start-field'); field.append(element('span', 'start-label', r[0]), element('span', 'start-value', r[1]), element('span', 'start-hint', r[2])); list.append(field); });
-    $('#start-note').textContent = 'В примере утром уже проверено ' + CONFIG.seed.checked + ' плодов из ' + CONFIG.sampleTotal + ', найден ' + CONFIG.seed.defects + ' брак. ' + (CONFIG.sampleTotal - CONFIG.seed.checked === 1 ? 'Вам остался один плод: от него зависит, поедет ли партия как есть.' : 'Вам осталось ' + fruitCount(CONFIG.sampleTotal - CONFIG.seed.checked) + '.');
+    $('#start-note').textContent = 'В примере утром уже проверено ' + CONFIG.seed.checked + ' плодов из ' + CONFIG.sampleTotal + ', найден ' + CONFIG.seed.defects + ' брак. ' + (CONFIG.sampleTotal - CONFIG.seed.checked === 1 ? 'Вам остался один плод: от него зависит, поедет ли партия как есть.' : 'Вам осталось ' + fruitCount(CONFIG.sampleTotal - CONFIG.seed.checked) + '.') + ' Для показа проба уменьшена: в жизни плодов проверяют больше.';
   }
   // The box is chosen before the camera opens and shown on its own screen, so the random choice is visible.
   function renderPick() {
@@ -761,7 +782,8 @@
     $('#hall-sample').className = 'hall-col hall-sample level-' + st.level;
     $('#hall-category').textContent = offspec ? 'Не по критериям' : 'Брак в пробе';
     $('#hall-number').textContent = (offspec ? st.offSpec : st.defects) + ' из ' + st.checked;
-    $('#hall-other').textContent = (offspec ? 'Брак: ' + st.defects : 'Не по критериям: ' + st.offSpec) + ' из ' + st.checked + '. Проба ' + st.checked + ' из ' + S.goal;
+    var handMarked = unverified();
+    $('#hall-other').textContent = (offspec ? 'Брак: ' + st.defects : 'Не по критериям: ' + st.offSpec) + ' из ' + st.checked + '. Проба ' + st.checked + ' из ' + S.goal + (handMarked.count ? '. Без проверки моделью: ' + handMarked.count : '');
     $('#hall-risk').textContent = st.risk === null ? 'Риск среза: ' + riskText(st).toLowerCase() : 'Риск среза ' + Math.round(st.risk * 100) + ' %, ' + LEVELS[st.level];
     $('#hall-risk').className = 'hall-risk s-' + st.level;
     $('#hall-rec').textContent = recommendation(st); money(st, $('#hall-money'));

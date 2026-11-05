@@ -39,6 +39,15 @@ test('the passport names risks on the way, how to avoid them and what the RC ope
   assert.equal(Checks.transit(Core.defaultBatch(true), {}).risks.length, 5);
 });
 
+test('hand-marked fruit is named for the RC, every step has a plain-language line', () => {
+  const t = Checks.transit(Core.defaultBatch(true), { unverified: [{ p: 3, b: 11 }] });
+  assert.ok(t.risks.some(x => x.risk === 'Плоды без проверки моделью' && /паллета 3, ящик 11/.test(x.check)));
+  assert.ok(t.dock.some(d => /отмечены вручную/.test(d) && /паллета 3, ящик 11/.test(d)));
+  const s = Checks.sections(Core.defaultBatch(true));
+  assert.ok(s.every(x => x.plain && x.plain.length < 70 && !/[—·→]/.test(x.plain + x.lead)));
+  assert.match(s.find(x => x.key === 'cold').lead, /^Холодовая цепь - /);
+});
+
 test('own batches show only what the supplier entered', () => {
   const b = Core.defaultBatch(false);
   Object.assign(b, { code: 'П-1', supplier: 'Хозяйство', chain: 'Сеть', rc: 'РЦ', weight: 5 });

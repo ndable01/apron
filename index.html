@@ -7,13 +7,13 @@
 <meta name="description" content="Apron: проверьте пробу перед отгрузкой, сохраните замеры и подготовьте отчёт для РЦ.">
 <title>Apron</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="assets/app.css?v=14">
-<script defer src="assets/core.js?v=14"></script>
-<script defer src="assets/room.js?v=14"></script>
-<script defer src="assets/qr.js?v=14"></script>
-<script defer src="assets/checks.js?v=14"></script>
-<script defer src="assets/documents.js?v=14"></script>
-<script defer src="assets/app.js?v=14"></script>
+<link rel="stylesheet" href="assets/app.css?v=15">
+<script defer src="assets/core.js?v=15"></script>
+<script defer src="assets/room.js?v=15"></script>
+<script defer src="assets/qr.js?v=15"></script>
+<script defer src="assets/checks.js?v=15"></script>
+<script defer src="assets/documents.js?v=15"></script>
+<script defer src="assets/app.js?v=15"></script>
 </head>
 <body>
 <noscript>Для проверки пробы нужен JavaScript. Откройте ссылку в Safari или Chrome с включённым JavaScript.</noscript>
@@ -23,7 +23,7 @@
   <main>
     <section class="screen" id="s-start" aria-label="Новая партия">
       <div class="topbar"><button class="wordmark" type="button" aria-label="Apron">Apron</button><button class="text-link" type="button" data-go="batches">Мои партии</button></div>
-      <header class="head"><h1 class="title" tabindex="-1">Новая партия</h1><p class="sub">Вы поставщик. Перед отгрузкой проверьте пробу партии и покажите результат распределительному центру сети. Данные уже заполнены: это пример.</p></header>
+      <header class="head"><h1 class="title" tabindex="-1">Новая партия</h1><p class="sub">Вы поставщик. Перед отгрузкой проверьте пробу партии и покажите результат распределительному центру (РЦ) торговой сети: это склад, куда приедет машина. Данные уже заполнены: это пример.</p></header>
       <section class="card start-card" aria-label="Данные партии"><div id="start-fields"></div></section>
       <p class="small muted sample-origin" id="start-note"></p>
       <div class="actions mt18"><button class="btn" type="button" id="start-create">Создать партию</button><button class="btn-text" type="button" id="start-own">Заполнить свою партию</button></div>
@@ -50,13 +50,16 @@
       <ol class="cl-list" id="checklist">
         <li id="check-sections-anchor" hidden></li>
         <li class="cl-photo">
-          <div class="cl-row"><span class="cl-mark" id="photo-mark" aria-hidden="true"></span><span class="cl-text"><span class="cl-title">Проба по фото</span><span class="cl-sum" id="photo-sum"></span></span></div>
+          <div class="cl-row"><span class="cl-mark" id="photo-mark" aria-hidden="true"></span><span class="cl-text"><span class="cl-title">Проба по фото</span><span class="cl-plain">Вы снимаете плод, Apron оценивает его по фото</span><span class="cl-sum" id="photo-sum"></span></span></div>
           <section class="card" aria-labelledby="sample-title">
             <div class="card-head"><h2 class="h2" id="sample-title">Проба</h2><span class="small muted" id="sup-count"></span></div>
             <progress id="sup-progress" max="30" value="29" aria-label="Проверено плодов"></progress>
+            <p class="small muted sample-note" id="sup-sample-note" hidden></p>
             <div class="sample-metric"><span id="sup-category">Брак в пробе</span><strong id="sup-number"></strong></div>
             <p class="small muted" id="sup-other"></p>
+            <p class="small unverified" id="sup-unverified" hidden></p>
             <div class="risk-line"><span>Риск среза</span><strong id="sup-risk"></strong></div>
+            <p class="small muted risk-explain">Срез - когда сеть снижает оплату за брак сверх допуска. Риск показывает, насколько это вероятно по вашей пробе.</p>
             <p class="recommendation" id="sup-note"></p>
             <p class="money small" id="sup-money" hidden></p>
             <button class="btn mt18" type="button" id="sup-cta">Проверить плод</button>
@@ -64,7 +67,7 @@
             <button class="btn-text" type="button" id="sup-review" hidden>Посмотреть со стороны РЦ</button>
           </section>
         </li>
-        <li class="cl-rc"><div class="cl-row"><span class="cl-mark" id="rc-mark" aria-hidden="true"></span><span class="cl-text"><span class="cl-title">Решение РЦ</span><span class="cl-sum" id="rc-sum"></span></span></div></li>
+        <li class="cl-rc"><div class="cl-row"><span class="cl-mark" id="rc-mark" aria-hidden="true"></span><span class="cl-text"><span class="cl-title">Решение РЦ</span><span class="cl-plain">Склад сети решает, ждать ли машину и что проверить первым</span><span class="cl-sum" id="rc-sum"></span></span></div></li>
       </ol>
       <div class="decision-note" id="sup-decision" role="status" hidden></div>
       <p class="sample-origin small muted" id="sample-origin"></p>

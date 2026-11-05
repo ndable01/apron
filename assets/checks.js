@@ -10,12 +10,20 @@
   // Instrument models and norms follow the team's research of 5 November 2026 (ГОСТ 34298-2017, ТР ТС 021/2011, UC Davis postharvest).
   var KEYS = ['origin', 'gost', 'cold', 'ripeness', 'safety'];
   var TITLES = { origin: 'Партия и происхождение', gost: 'Проба по ГОСТ', cold: 'Холодовая цепь', ripeness: 'Зрелость и вкус', safety: 'Безопасность и документы' };
+  // One plain line under each step on the main screen: what it means for someone who has never shipped vegetables.
+  var PLAIN = {
+    origin: 'Что везём, откуда, куда и что требует сеть',
+    gost: 'Сколько плодов с дефектами, их размер и вес ящиков',
+    cold: 'Держали ли плоды в холоде, чтобы не испортились в дороге',
+    ripeness: 'Насколько спелые и плотные, доедут ли без потерь',
+    safety: 'Лабораторные анализы и документы на партию'
+  };
   var LEADS = {
-    origin: 'Что за партия, откуда она, куда едет и что требует сеть.',
-    gost: 'Замеры, по которым по ГОСТ 34298-2017 решается спор о качестве: доля плодов ниже сорта, калибр и масса нетто. Приборы с поверкой.',
-    cold: 'Температура плода и кузова при загрузке и логгер на весь рейс: по ним видно, где могла нарушиться холодовая цепь.',
-    ripeness: 'Зрелость, плотность и вкус. ГОСТ их числом не задаёт, а сеть задаёт: они показывают, как плоды перенесут дорогу.',
-    safety: 'Нитраты и пестициды подтверждает только протокол лаборатории, поэтому здесь документы, а не экспресс-тесты.'
+    origin: 'Паспорт груза: что за партия, откуда она, куда едет и какие требования у сети-покупателя.',
+    gost: 'ГОСТ - государственный стандарт на свежие томаты. По нему решают спор о качестве: сколько плодов хуже заявленного сорта, какого они размера (калибр) и сколько весит ящик. Замеры сделаны поверенными приборами.',
+    cold: 'Холодовая цепь - когда плоды всё время в холоде: на складе, в кузове и на рампе. Если где-то стало тепло или слишком холодно, томаты портятся быстрее. Здесь замеры, которые это подтверждают.',
+    ripeness: 'Насколько плоды спелые, плотные и сладкие. ГОСТ это числом не задаёт, а сеть задаёт: от этого зависит, доедут ли томаты без потерь.',
+    safety: 'Нитраты и остатки средств защиты растений проверяет лаборатория, её протокол и есть доказательство. Плюс документы, без которых сеть не примет партию.'
   };
   // Example specification of the fictional chain «Город». Not a real chain's document.
   var CHAIN_SPEC = [
@@ -127,7 +135,7 @@
     var data = batch.example ? example(opts.today || new Date()) : own(batch, opts.files || {});
     return KEYS.map(function (k) {
       var s = data[k];
-      return { key: k, title: TITLES[k], lead: LEADS[k], summary: s.summary, done: batch.example ? true : !!s.done, example: !!batch.example, items: s.items };
+      return { key: k, title: TITLES[k], plain: PLAIN[k], lead: LEADS[k], summary: s.summary, done: batch.example ? true : !!s.done, example: !!batch.example, items: s.items };
     });
   }
   // How many of the chain's checked requirements are met.
@@ -156,7 +164,10 @@
       { risk: 'Конденсат при выгрузке', why: 'Тёплый воздух на холодных плодах, плесень за 1-2 дня', avoid: 'Выгружать сразу в холодную камеру, не держать паллеты на рампе', check: 'Сколько времени паллеты простояли на рампе до камеры' }
     ];
     if (boxes.length) risks.push({ risk: 'Брак, найденный в пробе', why: 'В этих местах уже были дефектные плоды: рядом могут быть ещё', avoid: 'Досортировать эти паллеты до отгрузки', check: 'Первыми вскрыть: ' + boxes.join('; ') });
-    var dock = (boxes.length ? ['Первыми вскройте: ' + boxes.join('; ') + '.'] : []).concat(ctx.hints || [], [
+    // Fruits the model did not confirm are counted, but their boxes are named so the RC can check them first.
+    var manual = (ctx.unverified || []).map(function (b) { return 'паллета ' + b.p + ', ящик ' + b.b; });
+    if (manual.length) risks.push({ risk: 'Плоды без проверки моделью', why: 'Отметку поставил поставщик вручную, Apron её не подтвердил', avoid: 'Переснять эти плоды так, чтобы модель смогла их оценить', check: 'Вскрыть: ' + manual.join('; ') });
+    var dock = (boxes.length ? ['Первыми вскройте: ' + boxes.join('; ') + '.'] : []).concat(manual.length ? ['Проверьте ящики, где плоды отмечены вручную без проверки моделью: ' + manual.join('; ') + '.'] : [], ctx.hints || [], [
       'Сверьте номер пломбы' + (batch.example ? ' № 0458812' : '') + ' и снимите PDF с логгера' + (batch.example ? ' № 39017744' : '') + '.',
       'Измерьте температуру мякоти 3 плодов у задней двери.',
       'Вскройте 3 своих случайных места.'
