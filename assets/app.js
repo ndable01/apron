@@ -213,10 +213,12 @@
     $('#sup-sample-note').textContent = 'Для показа проба уменьшена: в жизни поставщик проверяет больше плодов и из большего числа ящиков. ' + S.seed.checked + ' уже проверены утром' + (left ? ', вам ' + (left === 1 ? 'остался один плод' : 'осталось ' + fruitCount(left)) : '') + '.';
     $('#sup-unverified').hidden = !manual.count; if (manual.count) $('#sup-unverified').textContent = unverifiedText(manual);
     $('#sup-progress').max = S.goal; $('#sup-progress').value = st.checked;
-    $('#sup-number').parentElement.hidden = !st.checked; $('#sup-other').hidden = !st.checked;
-    $('#sup-category').textContent = st.category === 'offspec' ? 'Не по критериям' : 'Брак в пробе';
-    $('#sup-number').textContent = (st.category === 'offspec' ? st.offSpec : st.defects) + ' из ' + st.checked;
-    $('#sup-other').textContent = st.category === 'offspec' ? 'Брак: ' + st.defects + ' из ' + st.checked : 'Не по критериям: ' + st.offSpec + ' из ' + st.checked;
+    // The big number is the progress of the sample; defects follow on a plain line.
+    $('#sup-count').textContent = '';
+    $('#sup-number').parentElement.hidden = false; $('#sup-other').hidden = !st.checked;
+    $('#sup-category').textContent = 'Проверено';
+    $('#sup-number').textContent = st.checked + '/' + S.goal;
+    $('#sup-other').textContent = 'Брак: ' + plural(st.defects, 'плод', 'плода', 'плодов') + ', не по критериям: ' + st.offSpec;
     $('#sup-risk').textContent = riskText(st); $('#sup-risk').className = 's-' + st.level;
     $('#sup-note').textContent = recommendation(st); money(st, $('#sup-money'));
     $('#sup-cta').textContent = st.needsReview ? 'Проверить отметки в отчёте' : st.done ? (ROLE ? 'Открыть отчёт о пробе' : 'Посмотреть со стороны РЦ') : pendingPhoto ? 'Продолжить проверку снимка' : 'Проверить плод';
