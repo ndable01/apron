@@ -5,7 +5,9 @@
   var $$ = function (s) { return Array.from(document.querySelectorAll(s)); };
   var params = new URLSearchParams(location.search);
   if (params.get('print') === '1') { printCards(); return; }
-  var Room = window.ApronRoom, QR = window.ApronQR;
+  var Room = window.ApronRoom, QR = window.ApronQR, Checks = window.ApronChecks;
+  // On a laptop the checklist stays on the left and the opened section is shown next to it.
+  var wide = window.matchMedia('(min-width: 960px)'), sectionKey = 'gost';
   // Shared room mode only with ?room= in the link; without it everything stays on this device.
   var LINK = Room.fromLink(location.search, CONFIG), ROLE = LINK.room ? LINK.role : null;
   var ROOM_KEY = ROLE ? 'apron-room-v1:' + LINK.room + ':' + ROLE : null;
@@ -19,6 +21,8 @@
   // Printable A5 box cards for the stage: the card is the background of the photo, so the model can read the label.
   function printCards() {
     document.title = 'Apron: карточки ящиков';
+    // A5 only for the box cards; the batch passport prints on A4.
+    var page = document.createElement('style'); page.textContent = '@page { size: A5 portrait; margin: 0 }'; document.head.append(page);
     var sheet = document.createElement('div'); sheet.className = 'print-sheet';
     var note = document.createElement('p'); note.className = 'print-note';
     note.textContent = 'Карточки для сцены. Печать на A5, без полей и масштабирования. Плод кладут в светлое поле, надпись ящика должна попасть в кадр.';
@@ -52,14 +56,16 @@
   var decimal = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
   var precise = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 6 });
   var S = ROLE ? Core.roomState(LINK.room, ROLE) : Core.baseState();
+  // A first visit without any saved work starts from the new batch screen, so the viewer gets the context first.
+  var freshStart = !ROLE;
   try {
     var stored = ROLE ? localStorage.getItem(ROOM_KEY) : sessionStorage.getItem(STORE_KEY) || sessionStorage.getItem('apron-personal-sample-v2');
     if (ROLE) { if (stored) { var restored = Core.restore(stored); if (restored.room && restored.room.id === LINK.room && restored.room.role === ROLE) S = restored; } }
-    else if (stored) S = Core.restore(stored);
+    else if (stored) { S = Core.restore(stored); freshStart = false; }
     else {
       var lastBatch = localStorage.getItem('apron-last-batch-v1');
       var savedBatch = lastBatch && localStorage.getItem(LIBRARY_PREFIX + lastBatch);
-      if (savedBatch) { S = Core.restore(savedBatch); S.role = 'supplier'; }
+      if (savedBatch) { S = Core.restore(savedBatch); S.role = 'supplier'; freshStart = false; }
     }
   }
   catch (error) { $('#storage-warning').hidden = false; $('#storage-warning').textContent = 'Сохранённая проба недоступна. Начинаем новую проверку в этой вкладке.'; }
@@ -103,10 +109,9 @@
     $('#sample-origin').textContent = b.example ? (S.seed.checked ? 'Пример партии: первые ' + S.seed.checked + ' плодов заданы заранее. Создайте свою партию, чтобы начать проверку с нуля.' : 'Новая проверка на данных примера. Свои данные можно указать в новой партии.') : 'Проба вашей партии. Фото, отметки и замеры сохраняются на этом устройстве.';
     $('#report-origin').hidden = !S.seed.checked;
     $('#report-origin').textContent = 'Исходные ' + S.seed.checked + ' плодов заданы в примере, среди них ' + S.seed.defects + ' брак. Фото этой части пробы нет.';
-    var measured = Object.values(b.measurements).filter(function (v) { return v !== null; }).length;
-    var docs = Object.keys(b.documents).filter(function (key) { return b.documents[key] || filesFor(key).length; }).length;
-    $('#support-summary').textContent = 'Замеры ' + measured + ' из 6, ' + (documentBatch === b.id ? 'документы ' + docs + ' из 5' : documentLoadError ? 'файлы недоступны' : 'читаем документы') + (b.packaging ? ', упаковка отмечена' : '');
-    support($('#sup-support')); support($('#report-support')); method($('#sup-method')); method($('#report-method'));
+    if (b.example) reportSections($('#report-support')); else support($('#report-support'));
+    method($('#sup-method')); method($('#report-method'));
+    if (route === 'supplier') renderChecklist();
   }
   function event(text) { S.events.push({ text: text, ts: Date.now() }); S.events = S.events.slice(-30); }
   function boxText(box) { return 'паллета ' + box.p + ', ящик ' + box.b; }
@@ -117,6 +122,7 @@
   }
   function time(ts) { var d = new Date(ts); return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
   function riskText(st) { return st.level === 'empty' ? 'Пока нет данных' : st.needsReview ? 'Нужна перепроверка' : Math.round(st.risk * 100) + ' %, ' + LEVELS[st.level]; }
+  function plural(n, one, few, many) { var mod = n % 100, d = n % 10; return n + ' ' + (mod >= 11 && mod <= 14 ? many : d === 1 ? one : d >= 2 && d <= 4 ? few : many); }
   function fruitCount(n) { var mod = n % 100; return n + ' ' + (mod >= 11 && mod <= 14 ? 'плодов' : n % 10 === 1 ? 'плод' : n % 10 >= 2 && n % 10 <= 4 ? 'плода' : 'плодов'); }
   // What the model said about a fruit: the full answer on the supplier, a short copy from the room on RC and hall.
   function info(f) {
@@ -202,7 +208,148 @@
     $('#sup-extend').textContent = 'Расширить пробу: ещё ' + fruitCount(Math.max(1, extra || 10));
     $('#sup-review').hidden = !!ROLE || st.done || st.level !== 'high';
     renderDecision($('#sup-decision'));
+    renderChecklist();
   }
+
+  // Preparation checklist: five sections of readings and documents, then the photo sample and the RC decision.
+  function checkSections() {
+    var files = {}; ['declaration', 'quality', 'lab', 'shipment', 'labels'].forEach(function (k) { files[k] = filesFor(k).length; });
+    return Checks.sections(S.batch, { files: files });
+  }
+  function checkMark(node, done) { node.className = 'cl-mark' + (done ? ' done' : ''); }
+  var CHEVRON = '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l5 5-5 5"/></svg>';
+  function renderChecklist() {
+    var sections = checkSections(), st = Core.stats(S), list = $('#checklist'), anchor = $('#check-sections-anchor');
+    $$('#checklist .cl-section').forEach(function (n) { list.removeChild(n); });
+    sections.forEach(function (sec) {
+      var li = element('li', 'cl-section'), b = element('button', 'cl-row cl-link'); b.type = 'button'; b.dataset.section = sec.key;
+      if (wide.matches && sec.key === sectionKey) b.setAttribute('aria-current', 'true');
+      var mark = element('span'); checkMark(mark, sec.done); mark.setAttribute('aria-hidden', 'true');
+      var text = element('span', 'cl-text'); text.append(element('span', 'cl-title', sec.title), element('span', 'cl-sum', sec.summary));
+      var chev = element('span', 'cl-chev'); chev.innerHTML = CHEVRON;
+      b.append(mark, text, chev); b.setAttribute('aria-label', sec.title + (sec.done ? ', готово' : ', не заполнено') + '. ' + sec.summary);
+      li.append(b); list.insertBefore(li, anchor);
+    });
+    checkMark($('#photo-mark'), st.done && !st.needsReview);
+    $('#photo-sum').textContent = 'Проверено ' + st.checked + ' из ' + S.goal + (st.done ? ', проба закончена' : '');
+    checkMark($('#rc-mark'), !!S.decision);
+    $('#rc-sum').textContent = S.decision ? DECISION_NAMES[S.decision.kind] + ', ' + time(S.decision.ts) : canReview() ? 'Можно передать результат РЦ' : 'Ждёт конца пробы';
+    var done = sections.filter(function (x) { return x.done; }).length + (st.done && !st.needsReview ? 1 : 0) + (S.decision ? 1 : 0);
+    $('#check-count').textContent = done + ' из 7'; $('#check-progress').value = done;
+    var reqs = Checks.requirements(sections);
+    $('#check-req').textContent = reqs.total ? 'Требования сети: выполнено ' + reqs.met + ' из ' + reqs.total + (S.batch.example ? ' (спецификация для примера)' : '') : 'Требования сети записаны текстом в данных партии и автоматически не сверяются.';
+    $('#sup-detail').hidden = !wide.matches;
+    if (wide.matches) renderSection(sections.find(function (x) { return x.key === sectionKey; }) || sections[0], $('#sup-detail'), 'panel');
+  }
+  // One section with its readings: a screen on the phone, the side panel on a laptop, a block in the report.
+  function renderSection(sec, target, mode) {
+    target.replaceChildren();
+    var head = element('header', mode === 'report' ? 'section-head report' : 'head section-head');
+    var h = element(mode === 'screen' ? 'h1' : mode === 'panel' ? 'h2' : 'h3', mode === 'report' ? '' : 'title', sec.title); if (mode === 'screen') h.tabIndex = -1;
+    head.append(h); if (mode !== 'report') head.append(element('p', 'sub', sec.lead));
+    target.append(head);
+    if (sec.example) target.append(element('p', 'example-note', 'Пример показаний: значения, серийные номера, даты и номера документов условные.'));
+    sec.items.forEach(function (item) {
+      var box = element('div', 'measure'), top = element('div', 'measure-head');
+      top.append(element('span', 'measure-name', item.name), element('strong', 'measure-value', item.value)); box.append(top);
+      (item.details || []).forEach(function (d) { box.append(element('p', 'measure-detail', d)); });
+      if (item.list && item.list.length) { var ul = element('ul', 'measure-list'); item.list.forEach(function (x) { ul.append(element('li', '', x)); }); box.append(ul); }
+      if (item.check) {
+        var req = element('p', 'measure-req'); req.append(element('span', 'muted', 'Сеть требует: '), document.createTextNode(item.check.req + '. '), element('strong', item.check.ok ? 's-low' : 's-medium', item.check.ok ? 'Соответствует' : 'Отклонение'));
+        box.append(req);
+      }
+      if (item.meta && item.meta.length) {
+        var dl = element('dl', 'measure-meta');
+        item.meta.forEach(function (m) { dl.append(element('dt', '', m[0]), element('dd', '', m[1])); }); box.append(dl);
+      }
+      target.append(box);
+    });
+    if (!sec.example && !ROLE && mode !== 'report') { var edit = element('button', 'text-link mt18', 'Заполнить или изменить'); edit.type = 'button'; edit.dataset.go = 'measurements'; target.append(edit); }
+  }
+  function reportSections(target) {
+    target.replaceChildren();
+    checkSections().forEach(function (sec) {
+      var d = element('details', 'report-section'), sum = element('summary', '', sec.title + ': ' + sec.summary.charAt(0).toLowerCase() + sec.summary.slice(1));
+      var body = element('div', 'report-section-body'); renderSection(sec, body, 'report'); d.append(sum, body); target.append(d);
+    });
+  }
+  // Batch passport at shipment: one document for the supplier and the RC, saved as PDF through printing.
+  function passTable(head, rows) {
+    var wrap = element('div', 'pass-table-wrap'), table = element('table', 'pass-table'), thead = element('thead'), tr = element('tr');
+    head.forEach(function (h) { tr.append(element('th', '', h)); }); thead.append(tr); table.append(thead);
+    var body = element('tbody');
+    rows.forEach(function (r) { var row = element('tr'); r.forEach(function (c) { var td = element('td'); if (c instanceof Node) td.append(c); else td.textContent = c; row.append(td); }); body.append(row); });
+    table.append(body); wrap.append(table); return wrap;
+  }
+  function passSection(doc, title) { var s = element('section', 'pass-section'); s.append(element('h2', 'pass-h', title)); doc.append(s); return s; }
+  function renderPassport() {
+    var doc = $('#pass-doc'), b = S.batch, st = Core.stats(S), sections = checkSections(), reqs = Checks.requirements(sections), now = new Date();
+    var modelHints = Array.from(new Set(S.fruits.filter(function (f) { return f.verdict !== 'good' && info(f) && info(f).rc_hint; }).map(function (f) { var h = info(f).rc_hint; return /[.!?]$/.test(h) ? h : h + '.'; }))).slice(0, 3);
+    var trip = Checks.transit(b, { boxes: boxesWithFindings(), hints: modelHints });
+    doc.replaceChildren();
+    var head = element('header', 'pass-head');
+    head.append(element('p', 'pass-brand', 'Apron'), element('h1', 'pass-title', 'Паспорт партии ' + b.code), element('p', 'pass-sub', batchTitle() + '. ' + b.supplier + ' для сети «' + b.chain + '», ' + b.rc + '.'));
+    var status = !st.done ? 'Черновик: проба не закончена, проверено ' + st.checked + ' из ' + S.goal + '.' : !S.decision ? 'Проба закончена. Решение РЦ ещё не принято.' : 'Решение РЦ: «' + DECISION_NAMES[S.decision.kind] + '», ' + time(S.decision.ts) + '.';
+    head.append(element('p', 'pass-status', 'Сформирован ' + now.toLocaleDateString('ru-RU') + ' в ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) + '. ' + status));
+    if (b.example) head.append(element('p', 'pass-note', 'Пример: показания приборов, серийные номера, номера документов и спецификация сети «Город» условные.'));
+    doc.append(head);
+
+    var sum = passSection(doc, 'Заключение'), list = element('ul', 'pass-list');
+    list.append(element('li', '', reqs.total ? 'Требования сети: выполнено ' + reqs.met + ' из ' + reqs.total + '.' : 'Требования сети записаны текстом в данных партии и автоматически не сверялись.'));
+    list.append(element('li', '', 'Проба: брак ' + st.defects + ' из ' + st.checked + ', не по критериям ' + st.offSpec + ' из ' + st.checked + '. Риск среза ' + riskText(st) + '.'));
+    list.append(element('li', '', recommendation(st)));
+    list.append(element('li', '', S.decision ? decisionText(S.decision.kind) + ' ' + finalText(S.decision.kind) : 'Решение РЦ ещё не принято.'));
+    sum.append(list);
+
+    var batch = passSection(doc, 'Партия и рейс'), grid = element('dl', 'pass-grid');
+    [['Продукция', b.product + ', ' + precise.format(b.weight) + ' т, сорт ' + b.grade], ['Поставщик', b.supplier + ', партия ' + b.code], ['Получатель', 'Сеть «' + b.chain + '», ' + b.rc], ['Паллеты', plural(b.pallets, 'паллета', 'паллеты', 'паллет') + ' по ' + plural(b.boxesPerPallet, 'ящику', 'ящика', 'ящиков')],
+     ['Выезд', b.departure || 'Не указан'], ['Прибытие', b.arrival || 'Не указано'], ['Расстояние', b.distance === null ? 'Не указано' : number.format(b.distance) + ' км'], ['Стоимость', b.revenue === null ? 'Не указана' : number.format(b.revenue) + ' ₽']]
+      .concat(b.example ? [['Логгер', 'Testo 184 T3, № 39017744, пример'], ['Пломба', '№ 0458812, пример']] : [])
+      .forEach(function (r) { grid.append(element('dt', '', r[0]), element('dd', '', r[1])); });
+    batch.append(grid);
+
+    var sample = passSection(doc, 'Проба по фото'), interval = Core.wilson(st.defects, st.checked);
+    sample.append(element('p', 'pass-p', 'Проверено ' + st.checked + ' плодов из ' + S.goal + '. Брак ' + st.defects + ', не по критериям ' + st.offSpec + '. При ' + st.defects + ' из ' + st.checked + ' брак партии с вероятностью 95 % от ' + decimal.format(interval[0] * 100) + ' до ' + decimal.format(interval[1] * 100) + ' % (интервал Уилсона).'));
+    if (S.seed.checked) sample.append(element('p', 'pass-p muted', 'Первые ' + S.seed.checked + ' плодов проверены раньше, фото этой части пробы нет.'));
+    if (S.fruits.length) {
+      var shots = element('div', 'pass-fruits');
+      S.fruits.forEach(function (f) { var card = element('figure', 'pass-fruit'); card.append(photoNode(f, 'Плод ' + f.n)); var cap = element('figcaption'); cap.append(element('strong', '', 'Плод ' + f.n + ': ' + fruitTitle(f).toLowerCase()), element('span', '', sourceText(f)), element('span', '', placeText(f))); card.append(cap); shots.append(card); });
+      sample.append(shots);
+    }
+
+    var meas = passSection(doc, 'Замеры и требования сети'), rows = [];
+    sections.forEach(function (sec) {
+      sec.items.forEach(function (i) {
+        if (i.list) return;
+        var meta = (i.meta || []).filter(function (m) { return ['Прибор', 'Документ', 'Серийный номер', 'Поверка', 'Калибровка'].indexOf(m[0]) >= 0; }).map(function (m) { return m[1]; }).join('; ');
+        var verdict = i.check ? element('strong', i.check.ok ? 's-low' : 's-medium', i.check.ok ? 'Соответствует' : 'Отклонение') : '-';
+        rows.push([i.name, i.value, i.check ? i.check.req : '-', meta || '-', verdict]);
+      });
+    });
+    meas.append(passTable(['Показатель', 'Факт', 'Сеть требует', 'Прибор и проверка', 'Итог'], rows));
+
+    var way = passSection(doc, 'Что произойдёт с плодами в пути');
+    trip.forecast.forEach(function (p) { way.append(element('p', 'pass-p', p)); });
+    var risk = passSection(doc, 'Риски в пути: как избежать и что проверить');
+    risk.append(passTable(['Риск', 'Почему опасно', 'Как избежать', 'Что проверить на рампе'], trip.risks.map(function (r) { return [r.risk, r.why, r.avoid, r.check]; })));
+    var dock = passSection(doc, 'Порядок проверки на рампе РЦ'), ol = element('ol', 'pass-list');
+    trip.dock.forEach(function (d) { ol.append(element('li', '', d)); }); dock.append(ol);
+
+    var docs = passSection(doc, 'Документы'), safety = sections.find(function (x) { return x.key === 'safety'; }), dl = element('dl', 'pass-grid');
+    safety.items.forEach(function (i) { var m = (i.meta || []).map(function (x) { return x[1]; }).join(', '); dl.append(element('dt', '', i.name), element('dd', '', i.value + (m ? '. ' + m : ''))); });
+    docs.append(dl);
+
+    var sign = passSection(doc, 'Подписи'), signs = element('div', 'pass-signs');
+    ['Поставщик', 'Перевозчик', 'Приёмка РЦ'].forEach(function (who) { var s = element('div', 'pass-sign'); s.append(element('span', 'pass-sign-line'), element('span', 'small muted', who + ': ФИО, подпись, дата')); signs.append(s); });
+    sign.append(signs);
+    doc.append(element('p', 'pass-foot', 'Риск среза - вероятность превышения допуска сети по результатам пробы, Beta(k + 0,5; n - k + 0,5). Прогноз в пути - ориентир по данным о хранении томатов, а не обещание. Окончательное решение о приёмке принимает РЦ.'));
+  }
+  function printPassport() {
+    var title = document.title; document.title = 'Паспорт партии ' + S.batch.code;
+    window.addEventListener('afterprint', function done() { document.title = title; window.removeEventListener('afterprint', done); });
+    window.print();
+  }
+  function renderSectionScreen(key) { renderSection(checkSections().find(function (x) { return x.key === key; }), $('#section-body'), 'screen'); }
 
   // Room events. Every device stamps its own events; time only moves forward so keys stay unique.
   function publish(type, data) {
@@ -541,6 +688,35 @@
     if (!$('#model-card').hidden) $('#model-card').textContent = 'Проверка модели ' + card.model + ': на ' + card.checked + ' наших фото совпала с нами в ' + card.agreed + '. 9 ответов из 10 быстрее ' + decimal.format(card.p90) + ' с.';
   }
 
+  // First screen of the viewer's path: the example batch as a filled form, created with one tap.
+  function renderStart() {
+    var b = Core.defaultBatch(true), list = $('#start-fields'); list.replaceChildren();
+    [
+      ['Продукция', b.product + ', ' + precise.format(b.weight) + ' т', 'Сорт ' + b.grade + ', ГОСТ 34298-2017'],
+      ['Поставщик', b.supplier, 'Партия ' + b.code],
+      ['Получатель', 'Сеть «' + b.chain + '», ' + b.rc, 'Решение о приёмке принимает РЦ'],
+      ['Рейс', 'Выезд ' + b.departure, 'Прибытие ' + b.arrival + ', ' + number.format(b.distance) + ' км'],
+      ['Партия', plural(b.pallets, 'паллета', 'паллеты', 'паллет') + ' по ' + plural(b.boxesPerPallet, 'ящику', 'ящика', 'ящиков'), 'Стоимость ' + number.format(b.revenue) + ' ₽'],
+      ['Проба', b.sampleTotal + ' плодов', 'Допуск сети: брак ' + precise.format(b.tolerance.defect) + ' %, не по критериям ' + precise.format(b.tolerance.offspec) + ' %']
+    ].forEach(function (r) { var field = element('div', 'start-field'); field.append(element('span', 'start-label', r[0]), element('span', 'start-value', r[1]), element('span', 'start-hint', r[2])); list.append(field); });
+    $('#start-note').textContent = 'В примере утром уже проверено ' + CONFIG.seed.checked + ' плодов из ' + CONFIG.sampleTotal + ', найден ' + CONFIG.seed.defects + ' брак. Вам осталось ' + fruitCount(CONFIG.sampleTotal - CONFIG.seed.checked) + '.';
+  }
+  // The box is chosen before the camera opens and shown on its own screen, so the random choice is visible.
+  function renderPick() {
+    var p = ensurePending(), grid = $('#pick-grid'), stage = S.batch.example ? CONFIG.boxes.filter(function (x) { return x.p <= S.batch.pallets && x.b <= S.batch.boxesPerPallet; }) : [];
+    $('#pick-count').textContent = 'Плод ' + p.n + ' из ' + S.goal;
+    grid.replaceChildren(); grid.className = 'pick-grid' + (stage.length ? '' : ' pallets');
+    if (stage.length) {
+      $('#pick-sub').textContent = 'На сцене ' + plural(stage.length, 'ящик', 'ящика', 'ящиков') + ' из этой партии. Apron выбрал один из них случайно.';
+      stage.forEach(function (x) { var chosen = x.p === p.box.p && x.b === p.box.b, tile = element('div', 'pick-tile' + (chosen ? ' chosen' : '')); tile.append(element('span', '', 'Паллета ' + x.p), element('span', '', 'ящик ' + x.b)); if (chosen) tile.setAttribute('aria-label', 'Выбран: паллета ' + x.p + ', ящик ' + x.b); grid.append(tile); });
+    } else {
+      $('#pick-sub').textContent = 'В партии ' + plural(S.batch.pallets, 'паллета', 'паллеты', 'паллет') + ' по ' + plural(S.batch.boxesPerPallet, 'ящику', 'ящика', 'ящиков') + '. Apron выбрал место случайно.';
+      for (var i = 1; i <= Math.min(S.batch.pallets, 60); i++) { var tile = element('div', 'pick-tile' + (i === p.box.p ? ' chosen' : ''), String(i)); grid.append(tile); }
+      if (S.batch.pallets > 60) grid.append(element('div', 'pick-tile', '...'));
+    }
+    grid.setAttribute('aria-hidden', 'true');
+    $('#pick-box').textContent = 'Паллета ' + p.box.p + ', ящик ' + p.box.b;
+  }
   function baseURL() { return location.origin + location.pathname; }
   function qrSVG(text) {
     var code = QR.encode(text), size = code.size + 8, ns = 'http://www.w3.org/2000/svg';
@@ -766,9 +942,16 @@
   function normalizeRoute(r) {
     // Each room role keeps to its own screens: the hall only shows, the RC decides and reads the report.
     if (ROLE === 'hall') return 'hall';
-    if (ROLE === 'rc') return r === 'passport' ? 'passport' : 'rc';
+    if (ROLE === 'rc') return r === 'passport' || r === 'pass' ? r : 'rc';
     if (ROLE === 'supplier' && ['rc', 'batches', 'batch-edit', 'measurements'].indexOf(r) >= 0) return 'supplier';
-    if (['supplier', 'camera', 'analysis', 'nolink', 'result', 'rc', 'passport', 'batch-edit', 'measurements', 'batches'].indexOf(r) < 0) return 'supplier';
+    if (/^sec-/.test(r)) {
+      if (Checks.KEYS.indexOf(r.slice(4)) < 0 || ROLE === 'rc' || ROLE === 'hall') return 'supplier';
+      if (wide.matches) { sectionKey = r.slice(4); return 'supplier'; }
+      return r;
+    }
+    if (['pass', 'start', 'pick', 'supplier', 'camera', 'analysis', 'nolink', 'result', 'rc', 'passport', 'batch-edit', 'measurements', 'batches'].indexOf(r) < 0) return 'supplier';
+    if (r === 'start' && ROLE) return 'supplier';
+    if (r === 'pick' && (Core.stats(S).done || (S.pending && S.pending.photo))) return 'supplier';
     if (r === 'analysis') return S.pending && S.pending.photo ? 'nolink' : 'supplier';
     if (r === 'nolink' && !(S.pending && S.pending.photo)) return 'supplier';
     if (r === 'result' && !S.fruits.length) return 'supplier';
@@ -782,7 +965,8 @@
     if (r !== 'measurements') { documentDraftId++; documentDraft = null; documentPicker = null; documentBusy = false; releaseDocumentURLs(documentBatch === S.batch.id ? documentFiles : []); }
     route = r;
     if (location.hash !== '#' + r) history.replaceState(null, '', location.pathname + location.search + '#' + r);
-    $$('.screen').forEach(function (screen) { screen.classList.toggle('active', screen.id === 's-' + r); });
+    var screenId = /^sec-/.test(r) ? 'section' : r;
+    $$('.screen').forEach(function (screen) { screen.classList.toggle('active', screen.id === 's-' + screenId); });
     renderBatchInfo();
     if (r === 'batch-edit') fillBatchForm();
     if (r === 'measurements') fillMeasurements();
@@ -794,9 +978,14 @@
     if (r === 'rc') { S.role = 'rc'; save(); renderRC(); }
     if (r === 'passport') renderReport();
     if (r === 'hall') renderHall();
+    if (r === 'start') renderStart();
+    if (r === 'pick') renderPick();
+    if (screenId === 'section') renderSectionScreen(r.slice(4));
+    if (r === 'pass') renderPassport();
+    document.body.classList.toggle('printing-pass', r === 'pass');
     renderSync();
     window.scrollTo(0, 0);
-    var heading = $('#s-' + r + ' h1'); if (heading) heading.focus({ preventScroll: true });
+    var heading = $('#s-' + screenId + ' h1'); if (heading) heading.focus({ preventScroll: true });
     var batchId = S.batch.id;
     ensureDocuments(r !== 'measurements').then(function () { if (S.batch.id === batchId) renderBatchInfo(); }).catch(function () { if (S.batch.id === batchId) renderBatchInfo(); });
   }
@@ -831,6 +1020,13 @@
 
   document.addEventListener('click', function (e) {
     var button = e.target.closest('button'); if (!button) return;
+    if (button.closest('#menu') && !button.dataset.close) $('#menu').close();
+    if (button.id === 'menu-open') { $('#menu .menu-rc').hidden = !!ROLE || !canReview(); $('#menu').showModal(); return; }
+    if (button.dataset.section) {
+      if (wide.matches) { sectionKey = button.dataset.section; renderChecklist(); $('#sup-detail').scrollTop = 0; }
+      else go('sec-' + button.dataset.section);
+      return;
+    }
     if (button.dataset.docAdd) { pickDocument(button.dataset.docAdd); return; }
     if (button.dataset.docReplace) { pickDocument(button.dataset.docCategory, button.dataset.docReplace); return; }
     if (button.dataset.docRemove) {
@@ -871,7 +1067,7 @@
   $('#edit-batch').addEventListener('click', function () { openBatchEditor(false); });
   $('#new-batch').addEventListener('click', function () { openBatchEditor(true); });
   $('#report-back').addEventListener('click', function () { go(canReview() ? 'rc' : 'supplier'); });
-  $('#open-example').addEventListener('click', function () { cancelAnalysis(); stopCamera(); S = Core.baseState(); draftBatch = null; lastResultId = null; save(); go('supplier'); });
+  $('#open-example').addEventListener('click', function () { go('start'); });
   $('#batch-form').addEventListener('submit', function (e) {
     e.preventDefault(); var form = this, b = JSON.parse(JSON.stringify(draftBatch));
     ['code', 'product', 'supplier', 'chain', 'rc', 'grade', 'rules', 'departure', 'arrival', 'ramp', 'slotTime'].forEach(function (k) { b[k] = form.elements[k].value.trim(); });
@@ -909,15 +1105,25 @@
     }
   });
   $('#document-file').addEventListener('change', function () { receiveDocuments(this); });
-  $('#sup-cta').addEventListener('click', function () { var st = Core.stats(S); if (st.needsReview) go('passport'); else if (st.done) review(); else if (S.pending && S.pending.photo) analyze(); else go('camera'); });
+  $('#sup-cta').addEventListener('click', function () { var st = Core.stats(S); if (st.needsReview) go('passport'); else if (st.done) review(); else if (S.pending && S.pending.photo) analyze(); else go('pick'); });
   $('#sup-review').addEventListener('click', review);
-  $('#sup-extend').addEventListener('click', function () { var st = Core.stats(S), extra = Math.max(1, Core.extraNeeded(S) || 10); S.goal = Math.min(2000, st.checked + extra); S.decision = null; event('Проба расширена до ' + S.goal + ' плодов'); save(); publish('state', Core.tally(S)); go('camera'); });
+  $('#sup-extend').addEventListener('click', function () { var st = Core.stats(S), extra = Math.max(1, Core.extraNeeded(S) || 10); S.goal = Math.min(2000, st.checked + extra); S.decision = null; event('Проба расширена до ' + S.goal + ' плодов'); save(); publish('state', Core.tally(S)); go('pick'); });
   $('#cam-shot').addEventListener('click', capture);
   $('#cam-file').addEventListener('change', function () { readFile(this); });
   $('#cam-resume').addEventListener('click', analyze);
   $('#nl-retry').addEventListener('click', function () { if (S.pending) { S.pending.photo = null; S.pending.result = null; S.pending.test = false; S.pending.reason = null; save(); } go('camera'); });
   $('#an-cancel').addEventListener('click', function () { cancelAnalysis(); go('supplier'); });
-  $('#res-next').addEventListener('click', function () { if (Core.stats(S).done) review(); else go('camera'); });
+  $('#res-next').addEventListener('click', function () { if (Core.stats(S).done) review(); else go('pick'); });
+  $('#pick-go').addEventListener('click', function () { go('camera'); });
+  $('#pass-print').addEventListener('click', printPassport);
+  $('#pass-print-2').addEventListener('click', printPassport);
+  $('#pass-back').addEventListener('click', function () { if (history.length > 1) history.back(); else go(ROLE === 'rc' ? 'rc' : 'supplier'); });
+  $('#start-own').addEventListener('click', function () { openBatchEditor(true); });
+  $('#start-create').addEventListener('click', function () {
+    cancelAnalysis(); stopCamera(); S = Core.baseState(); draftBatch = null; lastResultId = null;
+    event('Создана партия ' + S.batch.code + '. Проверено ' + S.seed.checked + ' из ' + S.goal + '.'); save(); go('supplier');
+    toast('Партия создана. Осталось проверить ' + fruitCount(S.goal - S.seed.checked) + '.');
+  });
   $('#res-correct').addEventListener('click', function () { openCorrection(resultFruit().id); });
   $('#reset-confirm').addEventListener('click', function () {
     cancelAnalysis(); stopCamera(); lastResultId = null; cameraMessage = ''; $('#reset-dialog').close();
@@ -946,6 +1152,7 @@
       wordmark.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     });
   }
+  wide.addEventListener('change', function () { if (route === 'supplier') renderChecklist(); else if (wide.matches && /^sec-/.test(route)) { sectionKey = route.slice(4); go('supplier'); } });
   window.addEventListener('popstate', function () { show(location.hash.slice(1)); });
   window.addEventListener('hashchange', function () { show(location.hash.slice(1)); });
   document.addEventListener('visibilitychange', function () { if (document.hidden) stopCamera(); else { requestWakeLock(); if (route === 'camera') startCamera(); } });
@@ -962,7 +1169,7 @@
   if (ROLE) {
     // A shared room: the judge holds the supplier phone, so editing and switching roles is hidden there.
     document.body.classList.add('room-mode', 'role-' + ROLE);
-    $$('.seg, .header-actions, #s-supplier [data-go="batches"], #s-supplier .restart, .support-details > .text-link').forEach(function (n) { n.hidden = true; });
+    $$('.seg, .header-actions, #s-supplier [data-go="batches"], #s-supplier .restart, .support-details > .text-link, #menu .menu-edit, #menu .menu-rc').forEach(function (n) { n.hidden = true; });
     $('#s-passport .back').textContent = ROLE === 'supplier' ? 'К партии' : 'К РЦ';
     $('#s-passport .back').dataset.go = ROLE === 'supplier' ? 'supplier' : 'rc';
     requestWakeLock(); startSync();
@@ -971,6 +1178,7 @@
   // A completed personal session may return to its report after a reload.
   var initial = location.hash.slice(1);
   if (ROLE) initial = ROLE === 'supplier' ? (initial || 'supplier') : ROLE === 'rc' ? (initial === 'passport' ? 'passport' : 'rc') : 'hall';
+  else if (freshStart) initial = 'start';
   else {
     if (!S.fruits.length && !S.pending) initial = 'supplier';
     if (!initial) initial = S.role === 'rc' && canReview() ? 'rc' : 'supplier';
