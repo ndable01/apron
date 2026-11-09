@@ -18,7 +18,7 @@
     slot: { ramp: 4, time: 'завтра в 06:00' },
     spec: { product: 'томаты свежие, круглые, розовые', grade: 'первый', chain: 'Город', chain_rules: [], reference: null },
     // Set only after the separately hosted relay is connected. Never put an API key here.
-    analyzeUrl: 'https://apron-relay-1085045494168.europe-west4.run.app/inspect', analyzeTimeoutMs: 10000, minConfidence: 0.7,
+    analyzeUrl: '', analyzeTimeoutMs: 10000, minConfidence: 0.7,
     modelCard: { model: null, checked: null, agreed: null, p90: null },
     // The room comes only from the link (?room=). CONFIG.room is for a local check, the demo panel warns about it.
     room: '',

@@ -1,7 +1,7 @@
 'use strict';
 // Relative URLs preserve the existing GitHub Pages project path and QR links.
-var CACHE = 'apron-personal-v16-progress-20261105';
-var FILES = ['./', './index.html', './assets/app.css?v=16', './assets/core.js?v=16', './assets/room.js?v=16', './assets/qr.js?v=16', './assets/checks.js?v=16', './assets/app.js?v=16', './assets/documents.js?v=16', './assets/test-tomato.jpg', './fonts/onest-400.ttf', './fonts/onest-500.ttf', './fonts/onest-600.ttf'];
+var CACHE = 'apron-personal-v17-no-relay-20261109';
+var FILES = ['./', './index.html', './assets/app.css?v=17', './assets/core.js?v=17', './assets/room.js?v=17', './assets/qr.js?v=17', './assets/checks.js?v=17', './assets/app.js?v=17', './assets/documents.js?v=17', './assets/test-tomato.jpg', './fonts/onest-400.ttf', './fonts/onest-500.ttf', './fonts/onest-600.ttf'];
 self.addEventListener('install', function (event) {
   event.waitUntil(caches.open(CACHE).then(function (cache) { return cache.addAll(FILES.map(function (file) { return new Request(new URL(file, self.location.href).href, { cache: 'reload' }); })); }).then(function () { return self.skipWaiting(); }));
 });

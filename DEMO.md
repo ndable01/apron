@@ -100,11 +100,12 @@
 
 `prompts/inspect-system.md` и `prompts/inspect-schema.json` меняются только по решению команды.
 
-Сейчас подключено: Gemini, модель `gemini-3.5-flash-lite` (самая быстрая у Google с фото и ответом по схеме), рассуждения `minimal`. Relay работает в Google Cloud Run в Нидерландах, проект `kluch-513609`: https://apron-relay-1085045494168.europe-west4.run.app. Адрес уже стоит в `CONFIG.analyzeUrl`. Gemini API в России не работает, поэтому relay стоит в Европе; телефоны судей ходят только к relay. Ключ лежит только в `relay/.env` на ноутбуке (не в git) и в настройках сервиса Cloud Run.
+Сейчас модель не подключена: 9 ноября relay в Google Cloud Run удалён, `CONFIG.analyzeUrl` пустой, приложение пишет «Модель не подключена» и предлагает ручную отметку.
 
+Как было на питче и как вернуть: Gemini, модель `gemini-3.5-flash-lite` (самая быстрая у Google с фото и ответом по схеме), рассуждения `minimal`. Relay работал в Google Cloud Run в Нидерландах, проект `kluch-513609`, потому что Gemini API в России не работает; телефоны судей ходили только к relay. Ключ лежит только в `relay/.env` на ноутбуке (не в git).
+
+- Вернуть: `relay/deploy-cloudrun.sh` (нужен Google Cloud CLI, он стоит в `~/apron-tools/google-cloud-sdk`, вход `gcloud auth login`), затем адрес `…run.app/inspect` из вывода скрипта в `CONFIG.analyzeUrl` и пуш. Скрипт держит один тёплый экземпляр; после показа: `gcloud run services update apron-relay --min-instances 0 --region europe-west4 --project kluch-513609`.
 - Проверка: открыть `…run.app/health` с телефона без VPN, через мобильный интернет и через Wi-Fi площадки. Ответ `{"ok":true,"model":"gemini-3.5-flash-lite"}`.
-- Обновить relay после правок промпта или настроек: `relay/deploy-cloudrun.sh` (нужен Google Cloud CLI, он стоит в `~/apron-tools/google-cloud-sdk`, вход `gcloud auth login`).
-- Держится один тёплый экземпляр, чтобы первый снимок на сцене не ждал запуска. После питча: `gcloud run services update apron-relay --min-instances 0 --region europe-west4 --project kluch-513609`.
 - Лимиты в `relay/.env`: 200 запросов в минуту с одного IP (жюри в одном Wi-Fi), 2000 в сутки. Один снимок около 0,3 цента.
 - Замер 5 ноября: ответ модели 1,5-1,8 с, весь путь до relay и обратно 1,9-2,5 с.
 
